@@ -89,12 +89,7 @@
 			{
 				"command": "problemsExplorer.deleteProblem",
 				"title": "删除试题",
-				"icon": "media/minus.svg"
-			},
-			{
-				"command": "problemsExplorer.deleteSelectedProblem",
-				"title": "删除选中的试题",
-				"icon": "media/minus.svg"
+				"icon": "media/delete.svg"
 			},
 			{
 				"command": "caseView.addCase",
@@ -135,6 +130,10 @@
 				"command": "caseView.stopRunning",
 				"title": "停止运行",
 				"icon": "$(primitive-square)"
+			},
+			{
+				"command":"problemsExplorer.switchProblem",
+				"title":"切换试题"
 			}
 		],
 		"menus": {
@@ -150,27 +149,12 @@
 					"group": "navigation"
 				},
 				{
-					"command": "problemsExplorer.deleteSelectedProblem",
-					"when": "view==problemsExplorer",
-					"group": "navigation"
-				},
-				{
 					"command": "caseView.addCase",
 					"when": "view==caseView",
 					"group": "navigation"
 				},
 				{
-					"command": "caseView.deleteCase",
-					"when": "view==caseView",
-					"group": "navigation"
-				},
-				{
 					"command": "caseView.setting",
-					"when": "view==caseView",
-					"group": "navigation"
-				},
-				{
-					"command": "caseView.testSingleCase",
 					"when": "view==caseView",
 					"group": "navigation"
 				},
@@ -193,23 +177,31 @@
 			"view/item/context": [
 				{
 					"command": "problemsExplorer.renameProblem",
-					"when": "view==problemsExplorer && viewItem==problem"
+					"when": "view==problemsExplorer && viewItem==problem",
+					"group": "inline"
 				},
 				{
 					"command": "problemsExplorer.deleteProblem",
-					"when": "view==problemsExplorer && viewItem==problem"
+					"when": "view==problemsExplorer && viewItem==problem",
+					"group": "inline"
 				},
 				{
 					"command": "caseView.testSingleCase",
-					"when": "view==caseView && viewItem==case"
+					"when": "view==caseView && viewItem==case",
+					"group": "inline",
+					"order": 3
 				},
 				{
 					"command": "caseView.deleteCase",
-					"when": "view==caseView && viewItem==case"
+					"when": "view==caseView && viewItem==case",
+					"group": "inline",
+					"order": 2
 				},
 				{
 					"command": "caseView.renameCase",
-					"when": "view==caseView && viewItem==case"
+					"when": "view==caseView && viewItem==case",
+					"group": "inline",
+					"order": 1
 				}
 			]
 		}

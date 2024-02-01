@@ -1,18 +1,9 @@
 import * as vscode from 'vscode'
 
 export class ProblemsExplorerProvider implements vscode.TreeDataProvider<ProblemsItem> {
-	private _selectedItem: ProblemsItem | undefined;
 	private _onDidChangeTreeData: vscode.EventEmitter<ProblemsItem | undefined | void> = new vscode.EventEmitter<ProblemsItem | undefined | void>();
 	readonly onDidChangeTreeData: vscode.Event<ProblemsItem | undefined | void> = this._onDidChangeTreeData.event;
 	private problems: ProblemsItem[] = [];
-	private treeView: vscode.TreeView<ProblemsItem>;
-	constructor() {
-		this.treeView = vscode.window.createTreeView('problemsExplorer', { treeDataProvider: this });
-		this.treeView.onDidChangeSelection(e => {
-			console.log(e.selection[0]);
-			this._selectedItem = e.selection[0];
-		});
-	}
 	getTreeItem(element: ProblemsItem): vscode.TreeItem | Thenable<vscode.TreeItem> {
 		return element;
 	}
@@ -52,20 +43,11 @@ export class ProblemsExplorerProvider implements vscode.TreeDataProvider<Problem
 
 	public deleteProblem(element: ProblemsItem) {
 		let index = this.problems.indexOf(element);
-		if(index >= 0) {
+		if (index >= 0) {
 			this.problems.splice(index, 1);
 			this.refresh();
 		}
 		else console.log("Problem not found")
-	}
-
-	public deleteSelectedProblem() {
-		if (this._selectedItem) {
-			let index = this.problems.indexOf(this._selectedItem);
-			this.problems.splice(index, 1);
-			this.refresh();
-		}
-		else console.log("No problem selected");
 	}
 }
 
@@ -76,11 +58,18 @@ export class ProblemsItem extends vscode.TreeItem {
 		public readonly command?: vscode.Command
 	) {
 		super(label, collapsibleState);
+
+		this.command = {
+			command: 'problemsExplorer.switchProblem',
+			title: '切换试题',
+			arguments: [this]
+		};
 	}
+
 
 	setLabel(newLabel: string) {
 		this.label = newLabel;
 	}
 
-	contextValue="problem"
+	contextValue = "problem"
 }
