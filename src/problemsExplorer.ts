@@ -12,10 +12,6 @@ export class ProblemsExplorerProvider implements vscode.TreeDataProvider<Problem
 			console.log(e.selection[0]);
 			this._selectedItem = e.selection[0];
 		});
-		//this.problems.push(new ProblemsItem("Problem 1", vscode.TreeItemCollapsibleState.None));
-		//this.problems.push(new ProblemsItem("Problem 2", vscode.TreeItemCollapsibleState.None));
-		//this.problems.push(new ProblemsItem("Problem 3", vscode.TreeItemCollapsibleState.None));
-		//this.problems.push(new ProblemsItem("Problem 4", vscode.TreeItemCollapsibleState.None));
 	}
 	getTreeItem(element: ProblemsItem): vscode.TreeItem | Thenable<vscode.TreeItem> {
 		return element;

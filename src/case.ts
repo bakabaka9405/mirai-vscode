@@ -46,11 +46,12 @@ export class CaseViewProvider implements vscode.TreeDataProvider<CaseNode> {
 
 export class CaseNode extends vscode.TreeItem {
 	constructor(
-		public label:string,
+		public label: string,
 		public readonly collapsibleState: vscode.TreeItemCollapsibleState,
 		public readonly command?: vscode.Command
 	) {
 		super(label, collapsibleState);
+		this.iconPath = new vscode.ThemeIcon("pass");
 	}
 
 	public setLabel(label: string) {
