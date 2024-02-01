@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { CaseViewProvider } from './case'
+import { CaseViewProvider,CaseNode } from './case'
 import { ProblemsExplorerProvider, ProblemsItem } from './problemsExplorer'
 export function activate(context: vscode.ExtensionContext) {
 	const problemsExplorerProvider = new ProblemsExplorerProvider();
@@ -9,12 +9,26 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 	vscode.commands.registerCommand('problemsExplorer.addProblemFromFolder', () => { });
 	vscode.commands.registerCommand('problemsExplorer.renameProblem', (element: ProblemsItem) => {
-		problemsExplorerProvider.renameItem(element);
+		problemsExplorerProvider.renameProblem(element);
 	});
-	vscode.commands.registerCommand('problemsExplorer.deleteProblem', () => { });
+	vscode.commands.registerCommand('problemsExplorer.deleteProblem', (element: ProblemsItem) => {
+		problemsExplorerProvider.deleteProblem(element);
+	});
+	vscode.commands.registerCommand('problemsExplorer.deleteSelectedProblem', () => {
+		problemsExplorerProvider.deleteSelectedProblem();
+	});
 
 	const caseViewProvider = new CaseViewProvider();
 	vscode.window.registerTreeDataProvider('caseView', caseViewProvider);
+	vscode.commands.registerCommand('caseView.addCase', () => {
+		caseViewProvider.addCase();
+	});
+	vscode.commands.registerCommand('caseView.deleteCase', (element: CaseNode) => {
+		caseViewProvider.deleteCase(element);
+	});
+	vscode.commands.registerCommand('caseView.renameCase', (element: CaseNode) => {
+		caseViewProvider.renameCase(element);
+	});
 
 	vscode.window.registerWebviewViewProvider("inputView", {
 		resolveWebviewView(webviewView) {

@@ -1,10 +1,17 @@
 import * as vscode from 'vscode'
 
-export class ProblemsExplorerProvider implements vscode.TreeDataProvider<ProblemsItem>{
+export class ProblemsExplorerProvider implements vscode.TreeDataProvider<ProblemsItem> {
+	private _selectedItem: ProblemsItem | undefined;
 	private _onDidChangeTreeData: vscode.EventEmitter<ProblemsItem | undefined | void> = new vscode.EventEmitter<ProblemsItem | undefined | void>();
 	readonly onDidChangeTreeData: vscode.Event<ProblemsItem | undefined | void> = this._onDidChangeTreeData.event;
 	private problems: ProblemsItem[] = [];
+	private treeView: vscode.TreeView<ProblemsItem>;
 	constructor() {
+		this.treeView = vscode.window.createTreeView('problemsExplorer', { treeDataProvider: this });
+		this.treeView.onDidChangeSelection(e => {
+			console.log(e.selection[0]);
+			this._selectedItem = e.selection[0];
+		});
 		//this.problems.push(new ProblemsItem("Problem 1", vscode.TreeItemCollapsibleState.None));
 		//this.problems.push(new ProblemsItem("Problem 2", vscode.TreeItemCollapsibleState.None));
 		//this.problems.push(new ProblemsItem("Problem 3", vscode.TreeItemCollapsibleState.None));
@@ -20,7 +27,7 @@ export class ProblemsExplorerProvider implements vscode.TreeDataProvider<Problem
 		return undefined;
 	}
 
-	public async renameItem(element: ProblemsItem) {
+	public async renameProblem(element: ProblemsItem) {
 		const newName = await vscode.window.showInputBox({
 			placeHolder: "New name",
 			value: element.label
@@ -39,12 +46,30 @@ export class ProblemsExplorerProvider implements vscode.TreeDataProvider<Problem
 		if (!label) {
 			label = await vscode.window.showInputBox({
 				placeHolder: "Problem name",
-				value: "Problem "+(this.problems.length+1)
+				value: "Problem " + (this.problems.length + 1)
 			});
 		}
-		if(!label)return;
+		if (!label) return;
 		this.problems.push(new ProblemsItem(label, vscode.TreeItemCollapsibleState.None));
 		this.refresh();
+	}
+
+	public deleteProblem(element: ProblemsItem) {
+		let index = this.problems.indexOf(element);
+		if(index >= 0) {
+			this.problems.splice(index, 1);
+			this.refresh();
+		}
+		else console.log("Problem not found")
+	}
+
+	public deleteSelectedProblem() {
+		if (this._selectedItem) {
+			let index = this.problems.indexOf(this._selectedItem);
+			this.problems.splice(index, 1);
+			this.refresh();
+		}
+		else console.log("No problem selected");
 	}
 }
 
@@ -60,4 +85,6 @@ export class ProblemsItem extends vscode.TreeItem {
 	setLabel(newLabel: string) {
 		this.label = newLabel;
 	}
+
+	contextValue="problem"
 }

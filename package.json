@@ -22,14 +22,14 @@
 			],
 			"panel": [
 				{
-					"id": "problems-panel",
+					"id": "cases-panel",
 					"title": "测试",
 					"icon": "media/icon.svg"
 				}
 			]
 		},
 		"views": {
-			"problems-panel": [
+			"cases-panel": [
 				{
 					"id": "caseView",
 					"name": "案例"
@@ -60,10 +60,15 @@
 			{
 				"view": "problemsExplorer",
 				"contents": "还没有试题。\n[添加试题](command:problemsExplorer.addProblem)\n[从文件夹添加试题](command:problemsExplorer.addProblemFromFolder)",
-				"when": "workbenchState == empty"
+				"when": "!problemsExplorer"
 			}
 		],
 		"commands": [
+			{
+				"command": "problemsExplorer.renameProblem",
+				"title": "重命名",
+				"icon": "media/edit.svg"
+			},
 			{
 				"command": "problemsExplorer.addProblem",
 				"title": "添加试题",
@@ -75,28 +80,49 @@
 				"icon": "media/folder-search.svg"
 			},
 			{
-				"command": "problems.addCase",
+				"command": "problemsExplorer.deleteProblem",
+				"title": "删除试题",
+				"icon": "media/minus.svg"
+			},
+			{
+				"command": "problemsExplorer.deleteSelectedProblem",
+				"title": "删除选中的试题",
+				"icon": "media/minus.svg"
+			},
+			{
+				"command": "caseView.addCase",
 				"title": "添加样例",
 				"icon": "media/add.svg"
 			},
 			{
-				"command": "problems.deleteCase",
+				"command": "caseView.deleteCase",
 				"title": "删除样例",
 				"icon": "media/minus.svg"
 			},
 			{
-				"command": "problems.copyOutput",
+				"command":"caseView.renameCase",
+				"title":"重命名样例",
+				"icon":"media/edit.svg"
+			},
+			{
+				"command": "caseView.testSingleCase",
+				"title": "运行单个样例",
+				"icon": "media/play.svg"
+			},
+			{
+				"command": "caseView.testAllCase",
+				"title": "运行所有样例",
+				"icon": "media/play.svg"
+			},
+			{
+				"command": "outputView.copyOutput",
 				"title": "复制输出",
 				"icon": "media/copy.svg"
 			},
 			{
-				"command": "problems.setting",
+				"command": "caseView.setting",
 				"title": "配置",
 				"icon": "media/setting.svg"
-			},
-			{
-				"command": "problemsExplorer.renameProblem",
-				"title": "重命名"
 			}
 		],
 		"menus": {
@@ -104,37 +130,66 @@
 				{
 					"command": "problemsExplorer.addProblem",
 					"when": "view==problemsExplorer",
-					"group": "navigation",
-					"order": 1
+					"group": "navigation"
 				},
 				{
 					"command": "problemsExplorer.addProblemFromFolder",
 					"when": "view==problemsExplorer",
-					"group": "navigation",
-					"order": 2
+					"group": "navigation"
 				},
 				{
-					"command": "problems.addCase",
+					"command": "problemsExplorer.deleteSelectedProblem",
+					"when": "view==problemsExplorer",
+					"group": "navigation"
+				},
+				{
+					"command": "caseView.addCase",
 					"when": "view==caseView",
 					"group": "navigation"
 				},
 				{
-					"command": "problems.deleteCase",
+					"command": "caseView.deleteCase",
 					"when": "view==caseView",
 					"group": "navigation"
 				},
 				{
-					"command": "problems.setting",
+					"command": "caseView.setting",
 					"when": "view==caseView",
 					"group": "navigation"
 				},
 				{
-					"command": "problems.copyOutput",
+					"command": "caseView.testAllCase",
+					"when": "view==caseView",
+					"group": "navigation"
+				},
+				{
+					"command": "outputView.copyOutput",
 					"when": "view==outputView",
 					"group": "navigation"
 				}
 			],
-			"view/item/context": []
+			"view/item/context": [
+				{
+					"command": "problemsExplorer.renameProblem",
+					"when": "view==problemsExplorer && viewItem==problem"
+				},
+				{
+					"command": "problemsExplorer.deleteProblem",
+					"when": "view==problemsExplorer && viewItem==problem"
+				},
+				{
+					"command": "caseView.testSingleCase",
+					"when": "view==caseView && viewItem==case"
+				},
+				{
+					"command": "caseView.deleteCase",
+					"when": "view==caseView && viewItem==case"
+				},
+				{
+					"command": "caseView.renameCase",
+					"when": "view==caseView && viewItem==case"
+				}
+			]
 		}
 	},
 	"scripts": {
