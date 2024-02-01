@@ -1,41 +1,159 @@
 {
-  "name": "mirai-vscode",
-  "displayName": "mirai-vscode",
-  "description": "",
-  "version": "0.0.1",
-  "engines": {
-    "vscode": "^1.85.0"
-  },
-  "categories": [
-    "Other"
-  ],
-  "activationEvents": [],
-  "main": "./out/extension.js",
-  "contributes": {
-    "commands": [
-      {
-        "command": "mirai-vscode.helloWorld",
-        "title": "Hello World"
-      }
-    ]
-  },
-  "scripts": {
-    "vscode:prepublish": "yarn run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "pretest": "yarn run compile && yarn run lint",
-    "lint": "eslint src --ext ts",
-    "test": "vscode-test"
-  },
-  "devDependencies": {
-    "@types/vscode": "^1.85.0",
-    "@types/mocha": "^10.0.6",
-    "@types/node": "18.x",
-    "@typescript-eslint/eslint-plugin": "^6.19.1",
-    "@typescript-eslint/parser": "^6.19.1",
-    "eslint": "^8.56.0",
-    "typescript": "^5.3.3",
-    "@vscode/test-cli": "^0.0.4",
-    "@vscode/test-electron": "^2.3.9"
-  }
+	"name": "mirai-vscode",
+	"displayName": "mirai-vscode",
+	"description": "",
+	"version": "0.0.1",
+	"engines": {
+		"vscode": "^1.85.0"
+	},
+	"categories": [
+		"Other"
+	],
+	"activationEvents": [],
+	"main": "./out/extension.js",
+	"contributes": {
+		"viewsContainers": {
+			"activitybar": [
+				{
+					"id": "problems-explorer",
+					"title": "试题集",
+					"icon": "media/icon.svg"
+				}
+			],
+			"panel": [
+				{
+					"id": "problems-panel",
+					"title": "测试",
+					"icon": "media/icon.svg"
+				}
+			]
+		},
+		"views": {
+			"problems-panel": [
+				{
+					"id": "caseView",
+					"name": "案例"
+				},
+				{
+					"id": "inputView",
+					"name": "输入",
+					"type": "webview"
+				},
+				{
+					"id": "outputView",
+					"name": "输出"
+				},
+				{
+					"id": "expectedOutputView",
+					"name": "期望输出"
+				}
+			],
+			"problems-explorer": [
+				{
+					"id": "problemsExplorer",
+					"name": "所有试题",
+					"contextualTitle": "试题集"
+				}
+			]
+		},
+		"viewsWelcome": [
+			{
+				"view": "problemsExplorer",
+				"contents": "还没有试题。\n[添加试题](command:problemsExplorer.addProblem)\n[从文件夹添加试题](command:problemsExplorer.addProblemFromFolder)",
+				"when": "workbenchState == empty"
+			}
+		],
+		"commands": [
+			{
+				"command": "problemsExplorer.addProblem",
+				"title": "添加试题",
+				"icon": "media/add.svg"
+			},
+			{
+				"command": "problemsExplorer.addProblemFromFolder",
+				"title": "从文件夹添加试题",
+				"icon": "media/folder-search.svg"
+			},
+			{
+				"command": "problems.addCase",
+				"title": "添加样例",
+				"icon": "media/add.svg"
+			},
+			{
+				"command": "problems.deleteCase",
+				"title": "删除样例",
+				"icon": "media/minus.svg"
+			},
+			{
+				"command": "problems.copyOutput",
+				"title": "复制输出",
+				"icon": "media/copy.svg"
+			},
+			{
+				"command": "problems.setting",
+				"title": "配置",
+				"icon": "media/setting.svg"
+			},
+			{
+				"command": "problemsExplorer.renameProblem",
+				"title": "重命名"
+			}
+		],
+		"menus": {
+			"view/title": [
+				{
+					"command": "problemsExplorer.addProblem",
+					"when": "view==problemsExplorer",
+					"group": "navigation",
+					"order": 1
+				},
+				{
+					"command": "problemsExplorer.addProblemFromFolder",
+					"when": "view==problemsExplorer",
+					"group": "navigation",
+					"order": 2
+				},
+				{
+					"command": "problems.addCase",
+					"when": "view==caseView",
+					"group": "navigation"
+				},
+				{
+					"command": "problems.deleteCase",
+					"when": "view==caseView",
+					"group": "navigation"
+				},
+				{
+					"command": "problems.setting",
+					"when": "view==caseView",
+					"group": "navigation"
+				},
+				{
+					"command": "problems.copyOutput",
+					"when": "view==outputView",
+					"group": "navigation"
+				}
+			],
+			"view/item/context": []
+		}
+	},
+	"scripts": {
+		"vscode:prepublish": "yarn run compile",
+		"compile": "tsc -p ./",
+		"watch": "tsc -watch -p ./",
+		"pretest": "yarn run compile && yarn run lint",
+		"lint": "eslint src --ext ts",
+		"test": "vscode-test"
+	},
+	"devDependencies": {
+		"@types/vscode": "^1.85.0",
+		"@types/mocha": "^10.0.6",
+		"@types/node": "18.x",
+		"@typescript-eslint/eslint-plugin": "^6.19.1",
+		"@typescript-eslint/parser": "^6.19.1",
+		"eslint": "^8.56.0",
+		"typescript": "^5.3.3",
+		"@vscode/test-cli": "^0.0.4",
+		"@vscode/test-electron": "^2.3.9"
+	}
 }
