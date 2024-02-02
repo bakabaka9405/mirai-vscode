@@ -20,7 +20,7 @@ export class CaseViewProvider implements vscode.TreeDataProvider<CaseNode> {
 
 	getChildren(element?: CaseNode) {
 		if (this.cases) {
-			return this.cases.cases;
+			return this.cases.data;
 		}
 		else return [];
 	}
@@ -46,9 +46,9 @@ export class CaseViewProvider implements vscode.TreeDataProvider<CaseNode> {
 
 	public deleteCase(element: CaseNode) {
 		if (this.cases) {
-			let index = this.cases.cases.indexOf(element);
+			let index = this.cases.data.indexOf(element);
 			if (index >= 0) {
-				this.cases.cases.splice(index, 1);
+				this.cases.data.splice(index, 1);
 				this.refresh();
 			}
 		}
@@ -67,16 +67,16 @@ export class CaseViewProvider implements vscode.TreeDataProvider<CaseNode> {
 }
 
 export class CaseGroup {
-	public cases: CaseNode[] = []
+	public data: CaseNode[] = []
 	public current_case: CaseNode | undefined = undefined;
 	public push(node: CaseNode) {
-		this.cases.push(node);
+		this.data.push(node);
 		if (!this.current_case) {
 			this.current_case = node;
 		}
 	}
 	public get length(): number {
-		return this.cases.length;
+		return this.data.length;
 	}
 }
 
@@ -85,6 +85,9 @@ export class CaseNode extends vscode.TreeItem {
 		public label: string,
 		public readonly collapsibleState: vscode.TreeItemCollapsibleState,
 		public readonly command?: vscode.Command,
+		public input: string = "",
+		public output: string = "",
+		public expectedOutput: string = "",
 	) {
 		super(label, collapsibleState);
 		this.iconPath = new vscode.ThemeIcon("pass");
@@ -102,7 +105,4 @@ export class CaseNode extends vscode.TreeItem {
 
 	contextValue = "case";
 
-	public input: string = "";
-	public output: string = "";
-	public expectedOutput: string = "";
 }

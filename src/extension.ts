@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
-import { CaseViewProvider, CaseNode } from './caseView'
+import { CaseViewProvider, CaseNode, CaseGroup } from './caseView'
 import { ProblemsExplorerProvider, ProblemsItem } from './problemsExplorer'
+import { loadConfig, saveConfig } from './config'
 export function activate(context: vscode.ExtensionContext) {
 	// ProblemsExplorer
 	const problemsExplorerProvider = new ProblemsExplorerProvider();
@@ -17,7 +18,7 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 	vscode.commands.registerCommand('problemsExplorer.switchProblem', async (element: ProblemsItem) => {
 		await saveCurrentCaseContent();
-		caseViewProvider.switchCaseGroup(element.cases);
+		caseViewProvider.switchCaseGroup(element.caseGroup);
 		showCurrentCaseContent();
 	});
 
@@ -56,6 +57,8 @@ export function activate(context: vscode.ExtensionContext) {
 		if (inputView && outputView) {
 			const content = await getTextFromWebview(inputView);
 			setTextToWebview(outputView, content);
+			await saveCurrentCaseContent();
+			saveConfig(problemsExplorerProvider.problems);
 		}
 	});
 
@@ -339,6 +342,16 @@ export function activate(context: vscode.ExtensionContext) {
 		webviewOptions: {
 			retainContextWhenHidden: true
 		},
+	});
+
+	//load config
+	let config = loadConfig();
+	problemsExplorerProvider.problems = config.problems.map((problem: { label: string; cases: CaseGroup; }) => {
+		let p = new ProblemsItem(problem.label, vscode.TreeItemCollapsibleState.None);
+		p.caseGroup.data = Object.values(problem.cases).map((c) => {
+			return new CaseNode(c.label, vscode.TreeItemCollapsibleState.None, undefined, c.input, c.output, c.expectedOutput);
+		});
+		return p;
 	});
 }
 

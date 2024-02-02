@@ -4,7 +4,7 @@ import { CaseGroup } from './caseView'
 export class ProblemsExplorerProvider implements vscode.TreeDataProvider<ProblemsItem> {
 	private _onDidChangeTreeData: vscode.EventEmitter<ProblemsItem | undefined | void> = new vscode.EventEmitter<ProblemsItem | undefined | void>();
 	readonly onDidChangeTreeData: vscode.Event<ProblemsItem | undefined | void> = this._onDidChangeTreeData.event;
-	private problems: ProblemsItem[] = [];
+	public problems: ProblemsItem[] = [];
 	getTreeItem(element: ProblemsItem): vscode.TreeItem | Thenable<vscode.TreeItem> {
 		return element;
 	}
@@ -67,7 +67,7 @@ export class ProblemsItem extends vscode.TreeItem {
 		};
 	}
 
-	public cases: CaseGroup=new CaseGroup();
+	public caseGroup: CaseGroup = new CaseGroup();
 
 	setLabel(newLabel: string) {
 		this.label = newLabel;
