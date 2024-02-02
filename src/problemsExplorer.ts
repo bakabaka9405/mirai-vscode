@@ -1,4 +1,5 @@
 import * as vscode from 'vscode'
+import { CaseGroup } from './caseView'
 
 export class ProblemsExplorerProvider implements vscode.TreeDataProvider<ProblemsItem> {
 	private _onDidChangeTreeData: vscode.EventEmitter<ProblemsItem | undefined | void> = new vscode.EventEmitter<ProblemsItem | undefined | void>();
@@ -55,7 +56,7 @@ export class ProblemsItem extends vscode.TreeItem {
 	constructor(
 		public label: string,
 		public readonly collapsibleState: vscode.TreeItemCollapsibleState,
-		public readonly command?: vscode.Command
+		public readonly command?: vscode.Command,
 	) {
 		super(label, collapsibleState);
 
@@ -66,6 +67,7 @@ export class ProblemsItem extends vscode.TreeItem {
 		};
 	}
 
+	public cases: CaseGroup=new CaseGroup();
 
 	setLabel(newLabel: string) {
 		this.label = newLabel;

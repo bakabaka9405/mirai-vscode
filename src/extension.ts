@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { CaseViewProvider, CaseNode } from './case'
+import { CaseViewProvider, CaseNode } from './caseView'
 import { ProblemsExplorerProvider, ProblemsItem } from './problemsExplorer'
 export function activate(context: vscode.ExtensionContext) {
 	// ProblemsExplorer
@@ -15,10 +15,10 @@ export function activate(context: vscode.ExtensionContext) {
 	vscode.commands.registerCommand('problemsExplorer.deleteProblem', (element: ProblemsItem) => {
 		problemsExplorerProvider.deleteProblem(element);
 	});
-	vscode.commands.registerCommand('problemsExplorer.switchProblem', (element: ProblemsItem) => {
-		if (outputView) {
-			outputView.webview.postMessage({ command: 'setText', data: element.label });
-		}
+	vscode.commands.registerCommand('problemsExplorer.switchProblem', async (element: ProblemsItem) => {
+		await saveCurrentCaseContent();
+		caseViewProvider.switchCaseGroup(element.cases);
+		showCurrentCaseContent();
 	});
 
 	// CaseView
@@ -48,11 +48,51 @@ export function activate(context: vscode.ExtensionContext) {
 		});
 	}
 
-	vscode.commands.registerCommand('caseView.testAllCase', async (element: CaseNode) => {
+	function setTextToWebview(view: vscode.WebviewView, content: string) {
+		view.webview.postMessage({ command: 'setText', data: content });
+	}
+
+	vscode.commands.registerCommand('caseView.testAllCase', async () => {
 		if (inputView && outputView) {
-			const content=await getTextFromWebview(inputView);
-			outputView.webview.postMessage({ command: 'setText', data: content });
+			const content = await getTextFromWebview(inputView);
+			setTextToWebview(outputView, content);
 		}
+	});
+
+	async function saveCurrentCaseContent() {
+		if (inputView && outputView && expectedOutputView && caseViewProvider.current_case) {
+			const [inputContent, outputContent, expectedOutputContent] = await Promise.all([
+				getTextFromWebview(inputView),
+				getTextFromWebview(outputView),
+				getTextFromWebview(expectedOutputView)
+			]);
+			if (caseViewProvider.current_case) {
+				caseViewProvider.current_case.input = inputContent;
+				caseViewProvider.current_case.output = outputContent;
+				caseViewProvider.current_case.expectedOutput = expectedOutputContent;
+			}
+		}
+	}
+
+	function showCurrentCaseContent() {
+		if (inputView && outputView && expectedOutputView) {
+			if (caseViewProvider.current_case) {
+				setTextToWebview(inputView, caseViewProvider.current_case.input);
+				setTextToWebview(outputView, caseViewProvider.current_case.output);
+				setTextToWebview(expectedOutputView, caseViewProvider.current_case.expectedOutput);
+			}
+			else {
+				setTextToWebview(inputView, "");
+				setTextToWebview(outputView, "");
+				setTextToWebview(expectedOutputView, "");
+			}
+		}
+	}
+
+	vscode.commands.registerCommand('caseView.switchCase', async (element: CaseNode | undefined) => {
+		await saveCurrentCaseContent();
+		caseViewProvider.current_case = element;
+		showCurrentCaseContent();
 	});
 
 	let inputView = undefined as vscode.WebviewView | undefined;
@@ -118,7 +158,11 @@ export function activate(context: vscode.ExtensionContext) {
 							
 								switch (message.command) {
 									case 'getText':
-										vscode.postMessage({command:'response',data:editor.getValue()})
+										vscode.postMessage({command:'response',data:editor.getValue()});
+										break;
+									case 'setText':
+										editor.setValue(message.data);
+										break;
 								}
 							});
 						});
@@ -190,14 +234,18 @@ export function activate(context: vscode.ExtensionContext) {
 									'editor.lineHighlightBackground': '#2b3036',
 								}
 							});
+							const vscode = acquireVsCodeApi();
 							monaco.editor.setTheme('myTheme');
 							window.addEventListener('message', event => {
 								const message = event.data; // The JSON data our extension sent
 							
 								switch (message.command) {
+									case 'getText':
+										vscode.postMessage({command:'response',data:editor.getValue()});
+										break;
 									case 'setText':
-										console.log(message.data);
 										editor.setValue(message.data);
+										break;
 								}
 							});
 						});
@@ -267,7 +315,20 @@ export function activate(context: vscode.ExtensionContext) {
 									'editor.lineHighlightBackground': '#2b3036',
 								}
 							});
+							const vscode = acquireVsCodeApi();
 							monaco.editor.setTheme('myTheme');
+							window.addEventListener('message', event => {
+								const message = event.data; // The JSON data our extension sent
+							
+								switch (message.command) {
+									case 'getText':
+										vscode.postMessage({command:'response',data:editor.getValue()});
+										break;
+									case 'setText':
+										editor.setValue(message.data);
+										break;
+								}
+							});
 						});
 					</script>
 				</body>

@@ -132,13 +132,18 @@
 				"icon": "$(primitive-square)"
 			},
 			{
-				"command":"problemsExplorer.switchProblem",
-				"title":"切换试题"
+				"command": "problemsExplorer.switchProblem",
+				"title": "切换试题"
 			},
 			{
-				"command":"expectedOutputView.contrast",
-				"title":"对比输出",
-				"icon":"media/contrast.svg"
+				"command": "expectedOutputView.contrast",
+				"title": "对比输出",
+				"icon": "media/contrast.svg"
+			},
+			{
+				"command": "caseView.switchCase",
+				"title": "切换样例",
+				"group": "navigation"
 			}
 		],
 		"menus": {
@@ -179,9 +184,9 @@
 					"group": "navigation"
 				},
 				{
-					"command":"expectedOutputView.contrast",
-					"when":"view==expectedOutputView",
-					"group":"navigation"
+					"command": "expectedOutputView.contrast",
+					"when": "view==expectedOutputView",
+					"group": "navigation"
 				}
 			],
 			"view/item/context": [
