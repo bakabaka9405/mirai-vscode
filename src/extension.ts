@@ -67,7 +67,7 @@ export function activate(context: vscode.ExtensionContext) {
 		if (inputView && outputView && caseView) {
 			saveCurrentCaseContent();
 			saveConfig(problemsExplorerProvider.problems);
-			await doTest(problemsExplorerProvider.problems[0], caseViewProvider, caseView);
+			await doTest(caseViewProvider.getChildren(), caseViewProvider, caseView);
 			showCurrentCaseContent();
 		}
 		else {
@@ -394,7 +394,7 @@ export function activate(context: vscode.ExtensionContext) {
 			let uri1 = vscode.Uri.file(file1);
 			let uri2 = vscode.Uri.file(file2);
 
-			vscode.commands.executeCommand('vscode.diff', uri1, uri2, "输出对比");
+			vscode.commands.executeCommand('vscode.diff', uri1, uri2, "输出↔期望输出");
 		}
 	});
 

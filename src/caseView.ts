@@ -18,8 +18,8 @@ export class CaseViewProvider implements vscode.TreeDataProvider<CaseNode> {
 		return element;
 	}
 	getParent(element: CaseNode): vscode.ProviderResult<CaseNode> {
-        return element.parent;
-    }
+		return element.parent;
+	}
 
 	getChildren(element?: CaseNode) {
 		if (this.cases) {
@@ -28,8 +28,8 @@ export class CaseViewProvider implements vscode.TreeDataProvider<CaseNode> {
 		else return [];
 	}
 
-	refresh(): void {
-		this._onDidChangeTreeData.fire();
+	refresh(element?: CaseNode): void {
+		this._onDidChangeTreeData.fire(element);
 	}
 
 	public switchCaseGroup(element: CaseGroup) {
@@ -94,7 +94,6 @@ export class CaseNode extends vscode.TreeItem {
 		public expectedOutput: string = "",
 	) {
 		super(label, collapsibleState);
-		this.iconPath = new vscode.ThemeIcon("pass");
 
 		this.command = {
 			command: 'caseView.switchCase',
