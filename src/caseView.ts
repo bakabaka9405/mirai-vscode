@@ -17,6 +17,9 @@ export class CaseViewProvider implements vscode.TreeDataProvider<CaseNode> {
 	getTreeItem(element: CaseNode): vscode.TreeItem {
 		return element;
 	}
+	getParent(element: CaseNode): vscode.ProviderResult<CaseNode> {
+        return element.parent;
+    }
 
 	getChildren(element?: CaseNode) {
 		if (this.cases) {
@@ -81,6 +84,7 @@ export class CaseGroup {
 }
 
 export class CaseNode extends vscode.TreeItem {
+	parent: vscode.ProviderResult<CaseNode>;
 	constructor(
 		public label: string,
 		public readonly collapsibleState: vscode.TreeItemCollapsibleState,

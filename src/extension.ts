@@ -2,9 +2,17 @@ import * as vscode from 'vscode';
 import { CaseViewProvider, CaseNode, CaseGroup } from './caseView'
 import { ProblemsExplorerProvider, ProblemsItem } from './problemsExplorer'
 import { loadConfig, saveConfig } from './config'
+
+let problemsExplorer: vscode.TreeView<ProblemsItem>;
+let caseView: vscode.TreeView<CaseNode>;
+let inputView = undefined as vscode.WebviewView | undefined;
+let outputView = undefined as vscode.WebviewView | undefined;
+let expectedOutputView = undefined as vscode.WebviewView | undefined;
+
 export function activate(context: vscode.ExtensionContext) {
 	// ProblemsExplorer
 	const problemsExplorerProvider = new ProblemsExplorerProvider();
+	problemsExplorer = vscode.window.createTreeView('problemsExplorer', { treeDataProvider: problemsExplorerProvider });
 	vscode.window.registerTreeDataProvider('problemsExplorer', problemsExplorerProvider);
 	vscode.commands.registerCommand('problemsExplorer.addProblem', () => {
 		problemsExplorerProvider.addProblem();
@@ -24,6 +32,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// CaseView
 	const caseViewProvider = new CaseViewProvider();
+	caseView = vscode.window.createTreeView('caseView', { treeDataProvider: caseViewProvider });
 	vscode.window.registerTreeDataProvider('caseView', caseViewProvider);
 	vscode.commands.registerCommand('caseView.addCase', () => {
 		caseViewProvider.addCase();
@@ -56,6 +65,18 @@ export function activate(context: vscode.ExtensionContext) {
 	vscode.commands.registerCommand('caseView.testAllCase', async () => {
 		if (inputView && outputView) {
 			const content = await getTextFromWebview(inputView);
+			setTextToWebview(outputView, content);
+			await saveCurrentCaseContent();
+			saveConfig(problemsExplorerProvider.problems);
+		}
+	});
+
+	vscode.commands.registerCommand('caseView.testSingleCase', async (element: CaseNode) => {
+		caseView.reveal(element);
+		await vscode.commands.executeCommand('caseView.switchCase', element);
+		if (inputView && outputView) {
+			const content = await getTextFromWebview(inputView);
+
 			setTextToWebview(outputView, content);
 			await saveCurrentCaseContent();
 			saveConfig(problemsExplorerProvider.problems);
@@ -98,7 +119,7 @@ export function activate(context: vscode.ExtensionContext) {
 		showCurrentCaseContent();
 	});
 
-	let inputView = undefined as vscode.WebviewView | undefined;
+	//inputView
 	vscode.window.registerWebviewViewProvider("inputView", {
 		resolveWebviewView(webviewView) {
 			inputView = webviewView;
@@ -180,7 +201,7 @@ export function activate(context: vscode.ExtensionContext) {
 		},
 	});
 
-	let outputView = undefined as vscode.WebviewView | undefined;
+	//outputView
 	vscode.window.registerWebviewViewProvider("outputView", {
 		resolveWebviewView(webviewView) {
 			outputView = webviewView;
@@ -262,7 +283,16 @@ export function activate(context: vscode.ExtensionContext) {
 			retainContextWhenHidden: true
 		},
 	});
-	let expectedOutputView = undefined as vscode.WebviewView | undefined;
+
+	vscode.commands.registerCommand('outputView.copyOutput', async () => {
+		if (outputView) {
+			const content = await getTextFromWebview(outputView);
+			await vscode.env.clipboard.writeText(content);
+			vscode.window.showInformationMessage("已复制");
+		}
+	});
+
+	//expectedOutputView
 	vscode.window.registerWebviewViewProvider("expectedOutputView", {
 		resolveWebviewView(webviewView) {
 			expectedOutputView = webviewView;
@@ -342,6 +372,26 @@ export function activate(context: vscode.ExtensionContext) {
 		webviewOptions: {
 			retainContextWhenHidden: true
 		},
+	});
+
+	vscode.commands.registerCommand('expectedOutputView.contrast', async () => {
+		if (outputView && expectedOutputView) {
+			const os = require('os');
+			const fs = require('fs');
+			const path = require('path');
+			let file1 = path.join(os.tmpdir(), 'contrast_lt.txt');
+			let file2 = path.join(os.tmpdir(), 'contrast_rt.txt');
+	
+			const [output, expectedOutput] = await Promise.all([getTextFromWebview(outputView), getTextFromWebview(expectedOutputView)]);
+	
+			fs.writeFileSync(file1, output);
+			fs.writeFileSync(file2, expectedOutput);
+	
+			let uri1 = vscode.Uri.file(file1);
+			let uri2 = vscode.Uri.file(file2);
+	
+			vscode.commands.executeCommand('vscode.diff', uri1, uri2, "输出对比");
+		}
 	});
 
 	//load config
