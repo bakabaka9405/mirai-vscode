@@ -34,10 +34,24 @@ export function activate(context: vscode.ExtensionContext) {
 		caseViewProvider.renameCase(element);
 	});
 
-	vscode.commands.registerCommand('caseView.testAllCase', (element: CaseNode) => {
-		if (outputView) {
-			outputView.webview.postMessage({ command: 'setText', data: 'Hello, Webview!' });
-			console.log("发送成功");
+	function getTextFromWebview(view: vscode.WebviewView): Promise<string> {
+		return new Promise((resolve) => {
+			const listener = view.webview.onDidReceiveMessage(e => {
+				if (e.command === 'response') {
+					listener.dispose();
+					resolve(e.data);
+				}
+			},
+				undefined,
+				context.subscriptions);
+			view.webview.postMessage({ command: 'getText' });
+		});
+	}
+
+	vscode.commands.registerCommand('caseView.testAllCase', async (element: CaseNode) => {
+		if (inputView && outputView) {
+			const content=await getTextFromWebview(inputView);
+			outputView.webview.postMessage({ command: 'setText', data: content });
 		}
 	});
 
@@ -84,7 +98,8 @@ export function activate(context: vscode.ExtensionContext) {
 								lineNumbersMinChars: 2,
 								lineDecorationsWidth: 1,
 								contextmenu: false,
-								fontFamily:"'Jetbrains Mono Medium','Microsoft YaHei Mono', monospace"
+								fontFamily:"'Jetbrains Mono Medium','Microsoft YaHei Mono', monospace",
+								quickSuggestions: false
 							});
 							monaco.editor.defineTheme('myTheme', {
 								base: 'vs-dark',  // 基于暗色主题
@@ -97,6 +112,15 @@ export function activate(context: vscode.ExtensionContext) {
 								}
 							});
 							monaco.editor.setTheme('myTheme');
+							const vscode = acquireVsCodeApi();
+							window.addEventListener('message', event => {
+								const message = event.data; // The JSON data our extension sent
+							
+								switch (message.command) {
+									case 'getText':
+										vscode.postMessage({command:'response',data:editor.getValue()})
+								}
+							});
 						});
 					</script>
 				</body>
@@ -153,7 +177,8 @@ export function activate(context: vscode.ExtensionContext) {
 								lineNumbersMinChars: 2,
 								lineDecorationsWidth: 1,
 								contextmenu: false,
-								fontFamily:"'Jetbrains Mono Medium','Microsoft YaHei Mono', monospace"
+								fontFamily:"'Jetbrains Mono Medium','Microsoft YaHei Mono', monospace",
+								quickSuggestions: false
 							});
 							monaco.editor.defineTheme('myTheme', {
 								base: 'vs-dark',  // 基于暗色主题
@@ -229,7 +254,8 @@ export function activate(context: vscode.ExtensionContext) {
 								lineNumbersMinChars: 2,
 								lineDecorationsWidth: 1,
 								contextmenu: false,
-								fontFamily:"'Jetbrains Mono Medium','Microsoft YaHei Mono', monospace"
+								fontFamily:"'Jetbrains Mono Medium','Microsoft YaHei Mono', monospace",
+								quickSuggestions: false
 							});
 							monaco.editor.defineTheme('myTheme', {
 								base: 'vs-dark',  // 基于暗色主题
@@ -241,7 +267,6 @@ export function activate(context: vscode.ExtensionContext) {
 									'editor.lineHighlightBackground': '#2b3036',
 								}
 							});
-							editor.addCommand(0, function() {}, '');
 							monaco.editor.setTheme('myTheme');
 						});
 					</script>

@@ -32,7 +32,7 @@
 			"cases-panel": [
 				{
 					"id": "caseView",
-					"name": "案例"
+					"name": "样例"
 				},
 				{
 					"id": "inputView",
@@ -134,6 +134,11 @@
 			{
 				"command":"problemsExplorer.switchProblem",
 				"title":"切换试题"
+			},
+			{
+				"command":"expectedOutputView.contrast",
+				"title":"对比输出",
+				"icon":"media/contrast.svg"
 			}
 		],
 		"menus": {
@@ -172,6 +177,11 @@
 					"command": "caseView.stopRunning",
 					"when": "view==caseView",
 					"group": "navigation"
+				},
+				{
+					"command":"expectedOutputView.contrast",
+					"when":"view==expectedOutputView",
+					"group":"navigation"
 				}
 			],
 			"view/item/context": [
