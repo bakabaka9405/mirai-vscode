@@ -99,7 +99,7 @@
 			{
 				"command": "caseView.deleteCase",
 				"title": "删除样例",
-				"icon": "$(remove)"
+				"icon": "$(trash)"
 			},
 			{
 				"command": "caseView.renameCase",

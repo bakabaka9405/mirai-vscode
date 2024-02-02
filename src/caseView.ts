@@ -71,6 +71,9 @@ export class CaseGroup {
 	public current_case: CaseNode | undefined = undefined;
 	public push(node: CaseNode) {
 		this.cases.push(node);
+		if (!this.current_case) {
+			this.current_case = node;
+		}
 	}
 	public get length(): number {
 		return this.cases.length;
