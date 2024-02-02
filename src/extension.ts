@@ -2,8 +2,9 @@ import * as vscode from 'vscode';
 import { CaseViewProvider, CaseNode, CaseGroup } from './caseView'
 import { ProblemsExplorerProvider, ProblemsItem } from './problemsExplorer'
 import { loadConfig, saveConfig } from './config'
+import { doTest } from './codeRunner'
 
-let problemsExplorer: vscode.TreeView<ProblemsItem>;
+let problemsExplorerView: vscode.TreeView<ProblemsItem>;
 let caseView: vscode.TreeView<CaseNode>;
 let inputView = undefined as vscode.WebviewView | undefined;
 let outputView = undefined as vscode.WebviewView | undefined;
@@ -12,7 +13,7 @@ let expectedOutputView = undefined as vscode.WebviewView | undefined;
 export function activate(context: vscode.ExtensionContext) {
 	// ProblemsExplorer
 	const problemsExplorerProvider = new ProblemsExplorerProvider();
-	problemsExplorer = vscode.window.createTreeView('problemsExplorer', { treeDataProvider: problemsExplorerProvider });
+	problemsExplorerView = vscode.window.createTreeView('problemsExplorer', { treeDataProvider: problemsExplorerProvider });
 	vscode.window.registerTreeDataProvider('problemsExplorer', problemsExplorerProvider);
 	vscode.commands.registerCommand('problemsExplorer.addProblem', () => {
 		problemsExplorerProvider.addProblem();
@@ -63,11 +64,14 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	vscode.commands.registerCommand('caseView.testAllCase', async () => {
-		if (inputView && outputView) {
-			const content = await getTextFromWebview(inputView);
-			setTextToWebview(outputView, content);
-			await saveCurrentCaseContent();
+		if (inputView && outputView && caseView) {
+			saveCurrentCaseContent();
 			saveConfig(problemsExplorerProvider.problems);
+			await doTest(problemsExplorerProvider.problems[0], caseViewProvider, caseView);
+			showCurrentCaseContent();
+		}
+		else {
+			console.log("fuck");
 		}
 	});
 
@@ -381,15 +385,15 @@ export function activate(context: vscode.ExtensionContext) {
 			const path = require('path');
 			let file1 = path.join(os.tmpdir(), 'contrast_lt.txt');
 			let file2 = path.join(os.tmpdir(), 'contrast_rt.txt');
-	
+
 			const [output, expectedOutput] = await Promise.all([getTextFromWebview(outputView), getTextFromWebview(expectedOutputView)]);
-	
+
 			fs.writeFileSync(file1, output);
 			fs.writeFileSync(file2, expectedOutput);
-	
+
 			let uri1 = vscode.Uri.file(file1);
 			let uri2 = vscode.Uri.file(file2);
-	
+
 			vscode.commands.executeCommand('vscode.diff', uri1, uri2, "输出对比");
 		}
 	});
