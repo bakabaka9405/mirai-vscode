@@ -26,7 +26,7 @@ export class ProblemsExplorerProvider implements vscode.TreeDataProvider<Problem
 		}
 	}
 
-	private refresh() {
+	public refresh() {
 		this._onDidChangeTreeData?.fire();
 	}
 

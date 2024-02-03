@@ -3,6 +3,8 @@ import { CaseViewProvider, CaseNode, CaseGroup } from './caseView'
 import { ProblemsExplorerProvider, ProblemsItem } from './problemsExplorer'
 import { loadConfig, saveConfig } from './config'
 import { doTest, doSingleTest } from './codeRunner'
+import { startListen } from './listener';
+import { start } from 'repl';
 
 let problemsExplorerView: vscode.TreeView<ProblemsItem>;
 let caseView: vscode.TreeView<CaseNode>;
@@ -442,6 +444,8 @@ export function activate(context: vscode.ExtensionContext) {
 	let timer = setInterval(() => {
 		saveConfig(problemsExplorerProvider.problems);
 	}, 5000);
+
+	startListen(problemsExplorerProvider);
 }
 
 export function deactivate() {
