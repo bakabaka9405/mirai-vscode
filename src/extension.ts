@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { CaseViewProvider, CaseNode, CaseGroup } from './caseView'
 import { ProblemsExplorerProvider, ProblemsItem } from './problemsExplorer'
 import { loadConfig, saveConfig } from './config'
-import { doTest } from './codeRunner'
+import { doTest, doSingleTest } from './codeRunner'
 
 let problemsExplorerView: vscode.TreeView<ProblemsItem>;
 let caseView: vscode.TreeView<CaseNode>;
@@ -65,26 +65,20 @@ export function activate(context: vscode.ExtensionContext) {
 
 	vscode.commands.registerCommand('caseView.testAllCase', async () => {
 		if (inputView && outputView && caseView) {
-			saveCurrentCaseContent();
-			saveConfig(problemsExplorerProvider.problems);
 			await doTest(caseViewProvider.getChildren(), caseViewProvider, caseView);
 			showCurrentCaseContent();
 		}
 		else {
-			console.log("fuck");
+			console.log("测试窗口未加载完全");
 		}
 	});
 
 	vscode.commands.registerCommand('caseView.testSingleCase', async (element: CaseNode) => {
 		caseView.reveal(element);
-		await vscode.commands.executeCommand('caseView.switchCase', element);
-		if (inputView && outputView) {
-			const content = await getTextFromWebview(inputView);
-
-			setTextToWebview(outputView, content);
-			await saveCurrentCaseContent();
-			saveConfig(problemsExplorerProvider.problems);
-		}
+		element.iconPath = undefined;
+		caseViewProvider.refresh(element);
+		await doSingleTest(element);
+		caseViewProvider.refresh(element);
 	});
 
 	async function saveCurrentCaseContent() {
@@ -127,6 +121,15 @@ export function activate(context: vscode.ExtensionContext) {
 	vscode.window.registerWebviewViewProvider("inputView", {
 		resolveWebviewView(webviewView) {
 			inputView = webviewView;
+			inputView.webview.onDidReceiveMessage(e => {
+				if (e.command === 'textChanged') {
+					if (caseViewProvider.current_case) {
+						caseViewProvider.current_case.input = e.data;
+					}
+				}
+			},
+				undefined,
+				context.subscriptions);
 			webviewView.webview.options = {
 				enableScripts: true  // 启用脚本
 			};
@@ -193,6 +196,9 @@ export function activate(context: vscode.ExtensionContext) {
 										break;
 								}
 							});
+							editor.onDidChangeModelContent(function(event) {
+								vscode.postMessage({command:'textChanged',data:editor.getValue()});
+							});
 						});
 					</script>
 				</body>
@@ -209,6 +215,13 @@ export function activate(context: vscode.ExtensionContext) {
 	vscode.window.registerWebviewViewProvider("outputView", {
 		resolveWebviewView(webviewView) {
 			outputView = webviewView;
+			outputView.webview.onDidReceiveMessage(e => {
+				if (e.command === 'textChanged') {
+					if (caseViewProvider.current_case) {
+						caseViewProvider.current_case.output = e.data;
+					}
+				}
+			});
 			webviewView.webview.options = {
 				enableScripts: true  // 启用脚本
 			};
@@ -276,6 +289,9 @@ export function activate(context: vscode.ExtensionContext) {
 										break;
 								}
 							});
+							editor.onDidChangeModelContent(function(event) {
+								vscode.postMessage({command:'textChanged',data:editor.getValue()});
+							});
 						});
 					</script>
 				</body>
@@ -300,6 +316,13 @@ export function activate(context: vscode.ExtensionContext) {
 	vscode.window.registerWebviewViewProvider("expectedOutputView", {
 		resolveWebviewView(webviewView) {
 			expectedOutputView = webviewView;
+			expectedOutputView.webview.onDidReceiveMessage(e => {
+				if (e.command === 'textChanged') {
+					if (caseViewProvider.current_case) {
+						caseViewProvider.current_case.expectedOutput = e.data;
+					}
+				}
+			});
 			webviewView.webview.options = {
 				enableScripts: true  // 启用脚本
 			};
@@ -366,6 +389,13 @@ export function activate(context: vscode.ExtensionContext) {
 										break;
 								}
 							});
+							if (editor.getModel()) {
+								editor.onDidChangeModelContent(function(event) {
+									vscode.postMessage({command:'textChanged',data:editor.getValue()});
+								});
+							} else {
+								console.error('无法获取编辑器模型');
+							}
 						});
 					</script>
 				</body>
@@ -403,10 +433,15 @@ export function activate(context: vscode.ExtensionContext) {
 	problemsExplorerProvider.problems = config.problems.map((problem: { label: string; cases: CaseGroup; }) => {
 		let p = new ProblemsItem(problem.label, vscode.TreeItemCollapsibleState.None);
 		p.caseGroup.data = Object.values(problem.cases).map((c) => {
-			return new CaseNode(c.label, vscode.TreeItemCollapsibleState.None, undefined, c.input, c.output, c.expectedOutput);
+			return new CaseNode(c.label, vscode.TreeItemCollapsibleState.None, undefined, c.input, "", c.expectedOutput);
 		});
 		return p;
 	});
+
+	//save config
+	let timer = setInterval(() => {
+		saveConfig(problemsExplorerProvider.problems);
+	}, 5000);
 }
 
 export function deactivate() {

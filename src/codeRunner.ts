@@ -52,8 +52,6 @@ async function compile(sourceFile: string, dstFile: string) {
 			});
 		});
 	});
-
-	console.log(result.message);
 	return result;
 }
 
@@ -80,8 +78,50 @@ function compareOutput(output: string, expected: string) {
 	return trimEndSpaceEachLine(output) === trimEndSpaceEachLine(expected);
 }
 
-export async function doTest(testCases: CaseNode[], caseViewProvider: CaseViewProvider, caseView: vscode.TreeView<CaseNode>) {
+function prepareForCompile(): { sourceFile: string, executableFile: string } {
 	let sourceFile = getCurrentFile();
+	const executableFile = getExecutableFile(sourceFile);
+	fs.mkdirSync(path.join(os.tmpdir(), 'mirai-vscode'), { recursive: true });
+	return { sourceFile, executableFile };
+}
+
+async function doSingleTestimpl(testCase: CaseNode) {
+	fs.writeFileSync(input_file, testCase.input);
+	let { code, message } = await runSubprocess(getExecutableFile(getCurrentFile()), [], 1, 256);
+	testCase.output = readOutputFile(output_file);
+	if (code === 0) {
+		if (compareOutput(testCase.output, testCase.expectedOutput)) {
+			testCase.iconPath = { light: ac_icon, dark: ac_icon };
+		}
+		else {
+			testCase.iconPath = { light: wa_icon, dark: wa_icon };
+		}
+	}
+	else if (code == null && message == 'Timeout expired') {
+		testCase.iconPath = { light: tle_icon, dark: tle_icon };
+	}
+	else {
+		testCase.iconPath = { light: re_icon, dark: re_icon };
+	}
+}
+
+export async function doSingleTest(testCase: CaseNode) {
+	const { sourceFile, executableFile } = prepareForCompile();
+	if (sourceFile == "") {
+		vscode.window.showErrorMessage("未打开文件");
+		return;
+	}
+	const { code, message } = await compile(sourceFile, executableFile);
+	if(code === 0) {
+		await doSingleTestimpl(testCase);
+	}
+	else{
+		vscode.window.showErrorMessage("编译失败");
+	}
+}
+
+export async function doTest(testCases: CaseNode[], caseViewProvider: CaseViewProvider, caseView: vscode.TreeView<CaseNode>) {
+	const { sourceFile, executableFile } = prepareForCompile();
 	if (sourceFile == "") {
 		vscode.window.showErrorMessage("未打开文件");
 		return;
@@ -90,30 +130,11 @@ export async function doTest(testCases: CaseNode[], caseViewProvider: CaseViewPr
 		vscode.window.showErrorMessage("未添加测试用例");
 		return;
 	}
-	const executableFile = getExecutableFile(sourceFile);
-	fs.mkdirSync(path.join(os.tmpdir(), 'mirai-vscode'), { recursive: true });
-	let { code, message } = await compile(sourceFile, executableFile);
+	const { code, message } = await compile(sourceFile, executableFile);
 	if (code === 0) {
 		for (let c of testCases) {
 			caseView.reveal(c);
-			fs.writeFileSync(input_file, c.input);
-			let { code, message } = await runSubprocess(executableFile, [], 1, 256);
-			c.output = readOutputFile(output_file);
-			if (code === 0) {
-				if (compareOutput(c.output, c.expectedOutput)) {
-					c.iconPath = { light: ac_icon, dark: ac_icon};
-				}
-				else {
-					c.iconPath = {light:wa_icon, dark:wa_icon};
-				}
-			}
-			else if(code==null&&message=='Timeout expired'){
-				c.iconPath = {light:tle_icon, dark:tle_icon};
-			}
-			else {
-				c.iconPath = {light:re_icon, dark:re_icon};
-			}
-
+			await doSingleTestimpl(c);
 			caseViewProvider.refresh(c);
 		}
 		vscode.window.showInformationMessage("测试完成");

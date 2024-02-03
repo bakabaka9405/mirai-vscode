@@ -1,6 +1,6 @@
-# mirai-vscode README
+# mirai-vscode
 
-This is the README for your extension "mirai-vscode". After writing up a brief description, we recommend including the following sections.
+懒得改README。
 
 ## Features
 

@@ -13,7 +13,6 @@ export function saveConfig(problems: ProblemsItem[]) {
 					return {
 						label: c.label,
 						input: c.input,
-						output: c.output,
 						expectedOutput: c.expectedOutput
 					}
 				})

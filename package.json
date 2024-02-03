@@ -2,7 +2,11 @@
 	"name": "mirai-vscode",
 	"displayName": "mirai-vscode",
 	"description": "",
-	"version": "0.0.1",
+	"author": {
+		"name": "bakabaka9405",
+		"email": "bakabaka9405@gmail.com"
+	},
+	"version": "0.0.2",
 	"engines": {
 		"vscode": "^1.85.0"
 	},
@@ -11,6 +15,10 @@
 	],
 	"activationEvents": [],
 	"main": "./out/extension.js",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/bakabaka9405/mirai-vscode.git"
+	},
 	"contributes": {
 		"viewsContainers": {
 			"activitybar": [
@@ -240,10 +248,5 @@
 		"eslint": "^8.56.0",
 		"typescript": "^5.3.3"
 	},
-	"dependencies": {
-		"monaco-editor": "^0.45.0",
-		"react": "^18.2.0",
-		"react-dom": "^18.2.0",
-		"slate": "^0.101.5"
-	}
+	"dependencies": {}
 }
