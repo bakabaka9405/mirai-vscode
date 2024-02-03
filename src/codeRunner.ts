@@ -42,29 +42,8 @@ function runSubprocess(command: string, args: string[], timeoutSec: number, memo
 			resolve({ code: null, time: timeoutSec, memory: maxMemoryUsage, message: 'Time limit exceeded' });
 		}, timeoutSec * 1000);
 
-		const memoryMonitor = setInterval(() => {
-			pisusage(pid!, (err: any, stats: { memory: number; }) => {
-				if (err) {
-					//console.log(err);
-				}
-				else {
-					maxMemoryUsage = Math.max(maxMemoryUsage, stats.memory / 1024 / 1024);
-					if (maxMemoryUsage > memoryLimitMB) {
-						child.kill();
-						resolve({
-							code: null,
-							time: Number(process.hrtime.bigint() - startTime) / 1e6,
-							memory: maxMemoryUsage,
-							message: 'Memory limit exceeded'
-						});
-					}
-				}
-			});
-		}, 100);
-
 		child.on('exit', (code) => {
 			clearTimeout(timeoutId);
-			clearInterval(memoryMonitor);
 			resolve({
 				code,
 				time: Number(process.hrtime.bigint() - startTime) / 1e6,
@@ -74,8 +53,7 @@ function runSubprocess(command: string, args: string[], timeoutSec: number, memo
 		});
 
 		child.on('error', (error) => {
-			clearTimeout(timeoutId);
-			clearInterval(memoryMonitor);
+			clearTimeout(timeoutId);;
 			resolve({
 				code: null,
 				time: null,
@@ -95,13 +73,19 @@ async function compile(sourceFile: string, dstFile: string) {
 		return new Promise<{ code: number, message: string }>((resolve) => {
 			const compiler = config.get<string>("compiler_path");
 			const args = config.get<string[]>("compile_args");
+			let opt_relative_path = config.get<string>("output_relative_path");
+			if (!opt_relative_path) opt_relative_path = "";
 			if (!compiler || !args) {
 				console.log("No compiler configured");
 				resolve({ code: -1, message: "No compiler configured" });
 				return;
 			}
-			console.log(compiler, args, sourceFile, dstFile);
-			const child = spawn(compiler, [...args, sourceFile, '-o', dstFile], { windowsHide: true });
+			const child = spawn(compiler,
+				[...args, sourceFile, '-o',
+				path.join(path.dirname(sourceFile),
+					opt_relative_path,
+					path.basename(sourceFile,"cpp")+"exe")],
+				{ windowsHide: true });
 			child.on('exit', (code) => {
 				if (code === 0) {
 					resolve({ code, message: `Process exited with code ${code}` });
@@ -124,6 +108,14 @@ function getCurrentFile(): string {
 
 function getExecutableFile(sourceFile: string): string {
 	return sourceFile.replace(/\.\w+$/, ".exe");
+}
+
+function getFileBasePath(file: string): string {
+	return path.dirname(file);
+}
+
+function getFileName(file: string): string {
+	return path.basename(file);
 }
 
 function readOutputFile(outputFile: string): string {

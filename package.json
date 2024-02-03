@@ -7,7 +7,7 @@
 		"name": "bakabaka9405",
 		"email": "bakabaka9405@gmail.com"
 	},
-	"version": "0.0.3",
+	"version": "0.0.4",
 	"engines": {
 		"vscode": "^1.70.0"
 	},
@@ -250,6 +250,11 @@
 						"type": "string"
 					},
 					"default": []
+				},
+				"mirai-vscode.output_relative_path": {
+					"type": "string",
+					"description": "输出文件相对源文件的目录",
+					"default": ""
 				},
 				"mirai-vscode.mix_stdout_stderr": {
 					"type": "boolean",
