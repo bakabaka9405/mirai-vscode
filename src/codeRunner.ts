@@ -64,34 +64,38 @@ function runSubprocess(command: string, args: string[], timeoutSec: number, memo
 	});
 }
 
-async function compile(sourceFile: string, dstFile: string) {
+async function compile(srcFile: string, dstFile: string) {
 	const result = await vscode.window.withProgress({
 		location: vscode.ProgressLocation.Notification,
 		title: "正在编译...",
 		cancellable: false
 	}, async (progress) => {
-		return new Promise<{ code: number, message: string }>((resolve) => {
+		return new Promise<{ code: number, message: string, output: string }>((resolve) => {
 			const compiler = config.get<string>("compiler_path");
 			const args = config.get<string[]>("compile_args");
-			let opt_relative_path = config.get<string>("output_relative_path");
-			if (!opt_relative_path) opt_relative_path = "";
 			if (!compiler || !args) {
 				console.log("No compiler configured");
-				resolve({ code: -1, message: "No compiler configured" });
+				resolve({ code: -1, message: "No compiler configured", output: "" });
 				return;
 			}
-			const child = spawn(compiler,
-				[...args, sourceFile, '-o',
-				path.join(path.dirname(sourceFile),
-					opt_relative_path,
-					path.basename(sourceFile,"cpp")+"exe")],
+			console.log();
+			const child = spawn(compiler, [...args, srcFile, '-o', dstFile],
 				{ windowsHide: true });
+			let output = '';
+
+			child.stdout.on('data', (data) => {
+				output += data.toString();
+			});
+
+			child.stderr.on('data', (data) => {
+				output += data.toString();
+			});
 			child.on('exit', (code) => {
 				if (code === 0) {
-					resolve({ code, message: `Process exited with code ${code}` });
+					resolve({ code, message: `Process exited with code ${code}`, output });
 				}
 				else {
-					resolve({ code: -1, message: `Compilation failed` });
+					resolve({ code: -1, message: `Compilation failed`, output });
 				}
 			});
 		});
@@ -131,15 +135,18 @@ function compareOutput(output: string, expected: string) {
 }
 
 function prepareForCompile(): { sourceFile: string, executableFile: string } {
-	let sourceFile = getCurrentFile();
-	const executableFile = getExecutableFile(sourceFile);
-	fs.mkdirSync(path.join(os.tmpdir(), '.mirai-vscode'), { recursive: true });
+	const sourceFile = getCurrentFile();
+	let opt_relative_path = config.get<string>("output_relative_path");
+	if (!opt_relative_path) opt_relative_path = "";
+	const executableFile = path.join(path.dirname(sourceFile),
+		opt_relative_path,
+		path.basename(sourceFile, "cpp") + "exe")
 	return { sourceFile, executableFile };
 }
 
-async function doSingleTestimpl(testCase: CaseNode) {
+async function doSingleTestimpl(testCase: CaseNode, executableFile: string) {
 	fs.writeFileSync(input_file, testCase.input);
-	let { code, message } = await runSubprocess(getExecutableFile(getCurrentFile()), [], 1, 256);
+	let { code, message } = await runSubprocess(executableFile, [], 1, 256);
 	testCase.output = readOutputFile(output_file);
 	if (code === 0) {
 		if (compareOutput(testCase.output, testCase.expectedOutput)) {
@@ -166,13 +173,20 @@ export async function doSingleTest(testCase: CaseNode) {
 		vscode.window.showErrorMessage("未打开文件");
 		return;
 	}
-	const { code, message } = await compile(sourceFile, executableFile);
+	const { code, message, output } = await compile(sourceFile, executableFile);
 	console.log(message);
 	if (code === 0) {
-		await doSingleTestimpl(testCase);
+		await doSingleTestimpl(testCase, executableFile);
 	}
 	else {
-		vscode.window.showErrorMessage("编译失败");
+		vscode.window.showErrorMessage(`编译失败：${message}`, "查看详细信息").then((value) => {
+			if (value) {
+				const outputDocument=vscode.workspace.openTextDocument({content:output,language:"plaintext"});
+				outputDocument.then((doc)=>{
+					vscode.window.showTextDocument(doc);
+				});
+			}
+		});
 	}
 }
 
@@ -186,16 +200,23 @@ export async function doTest(testCases: CaseNode[], caseViewProvider: CaseViewPr
 		vscode.window.showErrorMessage("未添加测试用例");
 		return;
 	}
-	const { code, message } = await compile(sourceFile, executableFile);
+	const { code, message,output } = await compile(sourceFile, executableFile);
 	if (code === 0) {
 		for (let c of testCases) {
 			caseView.reveal(c);
-			await doSingleTestimpl(c);
+			await doSingleTestimpl(c, executableFile);
 			caseViewProvider.refresh(c);
 		}
 		vscode.window.showInformationMessage("测试完成");
 	}
 	else {
-		vscode.window.showErrorMessage("编译失败");
+		vscode.window.showErrorMessage(`编译失败：${message}`, "查看详细信息").then((value) => {
+			if (value) {
+				const outputDocument=vscode.workspace.openTextDocument({content:output,language:"plaintext"});
+				outputDocument.then((doc)=>{
+					vscode.window.showTextDocument(doc);
+				});
+			}
+		});
 	}
 }
