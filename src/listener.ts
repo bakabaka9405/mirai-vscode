@@ -12,10 +12,10 @@ export function startListen(problemsExplorerProvider: ProblemsExplorerProvider) 
 	app.post('/', (req: { body: any; }, res: { sendStatus: (arg0: number) => void; }) => {
 		const data = req.body;
 
-		console.log(`Problem name: ${data.name}`);
-		console.log(`Problem group: ${data.group}`);
-		console.log('Full body:');
-		console.log(JSON.stringify(data, null, 4));
+		//console.log(`Problem name: ${data.name}`);
+		//console.log(`Problem group: ${data.group}`);
+		//console.log('Full body:');
+		//console.log(JSON.stringify(data, null, 4));
 		let cnt = 0;
 		let p = new ProblemsItem(data.name, vscode.TreeItemCollapsibleState.None);
 		p.caseGroup.data = data.tests.map((c: any) => {
@@ -33,6 +33,6 @@ export function startListen(problemsExplorerProvider: ProblemsExplorerProvider) 
 			process.exit(1);
 		}
 
-		console.log(`Listening on port ${port}`);
+		console.log(`Mirai-vscode is listening on port ${port}`);
 	});
 }

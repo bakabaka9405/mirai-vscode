@@ -2,13 +2,14 @@
 	"name": "mirai-vscode",
 	"displayName": "mirai-vscode",
 	"description": "",
+	"publisher": "bakabaka9405",
 	"author": {
 		"name": "bakabaka9405",
 		"email": "bakabaka9405@gmail.com"
 	},
-	"version": "0.0.2",
+	"version": "0.0.3",
 	"engines": {
-		"vscode": "^1.85.0"
+		"vscode": "^1.70.0"
 	},
 	"categories": [
 		"Other"
@@ -227,6 +228,46 @@
 					"order": 1
 				}
 			]
+		},
+		"configuration": {
+			"type": "object",
+			"title": "Mirai-vscode",
+			"properties": {
+				"mirai-vscode.default_timeout": {
+					"type": "number",
+					"description": "默认超时时间(ms)",
+					"default": 1000
+				},
+				"mirai-vscode.compiler_path": {
+					"type": "string",
+					"description": "编译器路径",
+					"default": "g++"
+				},
+				"mirai-vscode.additional_include_path": {
+					"type": "array",
+					"description": "附加包含目录",
+					"items": {
+						"type": "string"
+					},
+					"default": []
+				},
+				"mirai-vscode.mix_stdout_stderr": {
+					"type": "boolean",
+					"description": "把标准错误输出也当作标准输出处理，如果你要使用 Address Sanitizer，启用这个功能。",
+					"default": false
+				},
+				"mirai-vscode.compile_args": {
+					"type": "array",
+					"description": "编译参数",
+					"items": {
+						"type": "string"
+					},
+					"default": [
+						"-std=c++20",
+						"-O2"
+					]
+				}
+			}
 		}
 	},
 	"scripts": {
@@ -241,7 +282,8 @@
 		"@types/body-parser": "^1.19.5",
 		"@types/mocha": "^10.0.6",
 		"@types/node": "18.x",
-		"@types/vscode": "^1.85.0",
+		"@types/pidusage": "^2.0.5",
+		"@types/vscode": "^1.70.0",
 		"@typescript-eslint/eslint-plugin": "^6.19.1",
 		"@typescript-eslint/parser": "^6.19.1",
 		"@vscode/test-cli": "^0.0.4",
@@ -251,6 +293,7 @@
 	},
 	"dependencies": {
 		"body-parser": "^1.20.2",
-		"express": "^4.18.2"
+		"express": "^4.18.2",
+		"pidusage": "^3.0.2"
 	}
 }

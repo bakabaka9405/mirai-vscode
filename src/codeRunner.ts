@@ -5,31 +5,83 @@ import * as os from 'os';
 import { ProblemsItem } from './problemsExplorer';
 import { CaseGroup, CaseNode, CaseViewProvider } from './caseView';
 import { spawn } from 'child_process';
+import pisusage from 'pidusage';
 
 const ac_icon = vscode.Uri.file(path.join(__dirname, '..', 'media', 'check.svg'));
 const wa_icon = vscode.Uri.file(path.join(__dirname, '..', 'media', 'error.svg'));
 const re_icon = vscode.Uri.file(path.join(__dirname, '..', 'media', 'bug.svg'));
 const tle_icon = vscode.Uri.file(path.join(__dirname, '..', 'media', 'clock.svg'));
 const mle_icon = vscode.Uri.file(path.join(__dirname, '..', 'media', 'memory.svg'));
-const input_file = path.join(os.tmpdir(), 'mirai-vscode', 'in.txt');
-const output_file = path.join(os.tmpdir(), 'mirai-vscode', 'out.txt');
-const err_file = path.join(os.tmpdir(), 'mirai-vscode', 'err.txt');
+const input_file = path.join(os.tmpdir(), '.mirai-vscode', 'in.txt');
+const output_file = path.join(os.tmpdir(), '.mirai-vscode', 'out.txt');
+const err_file = path.join(os.tmpdir(), '.mirai-vscode', 'err.txt');
 
-function runSubprocess(command: string, args: string[], timeoutSec: number, memoryLimitMB: number): Promise<{ code: number | null, message: string }> {
+let config = vscode.workspace.getConfiguration("mirai-vscode");
+vscode.workspace.onDidChangeConfiguration((e) => {
+	if (e.affectsConfiguration("mirai-vscode")) {
+		config = vscode.workspace.getConfiguration("mirai-vscode");
+	}
+});
+
+function runSubprocess(command: string, args: string[], timeoutSec: number, memoryLimitMB: number): Promise<{ code: number | null, time: number | null, memory: number | null, message: string }> {
 	return new Promise((resolve) => {
 		const input = fs.openSync(input_file, 'r');
 		const out = fs.openSync(output_file, 'w');
-		const err = fs.openSync(err_file, 'w');
+		const err = fs.openSync(config.get<Boolean>("mix_stdout_stderr") ? output_file : err_file, 'w');
+		const startTime = process.hrtime.bigint();
 		const child = spawn(command, args, { stdio: [input, out, err], windowsHide: true });
+		const pid = child.pid;
+		if (!pid) {
+			resolve({ code: null, time: null, memory: null, message: 'Spawn failed' });
+		}
+
+		let maxMemoryUsage = 0;
 		// Set resource limits for time and memory
 		const timeoutId = setTimeout(() => {
 			child.kill();
-			resolve({ code: null, message: 'Timeout expired' });
+			resolve({ code: null, time: timeoutSec, memory: maxMemoryUsage, message: 'Time limit exceeded' });
 		}, timeoutSec * 1000);
+
+		const memoryMonitor = setInterval(() => {
+			pisusage(pid!, (err: any, stats: { memory: number; }) => {
+				if (err) {
+					//console.log(err);
+				}
+				else {
+					maxMemoryUsage = Math.max(maxMemoryUsage, stats.memory / 1024 / 1024);
+					if (maxMemoryUsage > memoryLimitMB) {
+						child.kill();
+						resolve({
+							code: null,
+							time: Number(process.hrtime.bigint() - startTime) / 1e6,
+							memory: maxMemoryUsage,
+							message: 'Memory limit exceeded'
+						});
+					}
+				}
+			});
+		}, 100);
 
 		child.on('exit', (code) => {
 			clearTimeout(timeoutId);
-			resolve({ code, message: `Process exited with code ${code}` });
+			clearInterval(memoryMonitor);
+			resolve({
+				code,
+				time: Number(process.hrtime.bigint() - startTime) / 1e6,
+				memory: maxMemoryUsage,
+				message: `Process exited with code ${code}`
+			});
+		});
+
+		child.on('error', (error) => {
+			clearTimeout(timeoutId);
+			clearInterval(memoryMonitor);
+			resolve({
+				code: null,
+				time: null,
+				memory: null,
+				message: `Runtime Error`
+			});
 		});
 	});
 }
@@ -41,7 +93,15 @@ async function compile(sourceFile: string, dstFile: string) {
 		cancellable: false
 	}, async (progress) => {
 		return new Promise<{ code: number, message: string }>((resolve) => {
-			const child = spawn("g++", [sourceFile, "-o", dstFile]);
+			const compiler = config.get<string>("compiler_path");
+			const args = config.get<string[]>("compile_args");
+			if (!compiler || !args) {
+				console.log("No compiler configured");
+				resolve({ code: -1, message: "No compiler configured" });
+				return;
+			}
+			console.log(compiler, args, sourceFile, dstFile);
+			const child = spawn(compiler, [...args, sourceFile, '-o', dstFile], { windowsHide: true });
 			child.on('exit', (code) => {
 				if (code === 0) {
 					resolve({ code, message: `Process exited with code ${code}` });
@@ -81,7 +141,7 @@ function compareOutput(output: string, expected: string) {
 function prepareForCompile(): { sourceFile: string, executableFile: string } {
 	let sourceFile = getCurrentFile();
 	const executableFile = getExecutableFile(sourceFile);
-	fs.mkdirSync(path.join(os.tmpdir(), 'mirai-vscode'), { recursive: true });
+	fs.mkdirSync(path.join(os.tmpdir(), '.mirai-vscode'), { recursive: true });
 	return { sourceFile, executableFile };
 }
 
@@ -97,10 +157,13 @@ async function doSingleTestimpl(testCase: CaseNode) {
 			testCase.iconPath = { light: wa_icon, dark: wa_icon };
 		}
 	}
-	else if (code == null && message == 'Timeout expired') {
+	else if (code == null && message == 'Time limit exceeded') {
 		testCase.iconPath = { light: tle_icon, dark: tle_icon };
 	}
-	else {
+	else if (code == null && message == 'Memory limit exceeded') {
+		testCase.iconPath = { light: mle_icon, dark: mle_icon };
+	}
+	else if ((code == null && message == 'Runtime Error' || code !== 0)) {
 		testCase.iconPath = { light: re_icon, dark: re_icon };
 	}
 }
@@ -112,10 +175,11 @@ export async function doSingleTest(testCase: CaseNode) {
 		return;
 	}
 	const { code, message } = await compile(sourceFile, executableFile);
-	if(code === 0) {
+	console.log(message);
+	if (code === 0) {
 		await doSingleTestimpl(testCase);
 	}
-	else{
+	else {
 		vscode.window.showErrorMessage("编译失败");
 	}
 }
