@@ -15,21 +15,24 @@ const mle_icon = vscode.Uri.file(path.join(__dirname, '..', 'media', 'memory.svg
 const input_file = path.join(os.tmpdir(), '.mirai-vscode', 'in.txt');
 const output_file = path.join(os.tmpdir(), '.mirai-vscode', 'out.txt');
 const err_file = path.join(os.tmpdir(), '.mirai-vscode', 'err.txt');
+let config_has_changed = false;
+let file_md5_table = new Map<string, string>();
 
 let config = vscode.workspace.getConfiguration("mirai-vscode");
 vscode.workspace.onDidChangeConfiguration((e) => {
 	if (e.affectsConfiguration("mirai-vscode")) {
 		config = vscode.workspace.getConfiguration("mirai-vscode");
+		config_has_changed = true;
 	}
 });
 
-function runSubprocess(command: string, args: string[], timeoutSec: number, memoryLimitMB: number): Promise<{ code: number | null, time: number | null, memory: number | null, message: string }> {
+function runSubprocess(file: string, args: string[], timeoutSec: number, memoryLimitMB: number): Promise<{ code: number | null, time: number | null, memory: number | null, message: string }> {
 	return new Promise((resolve) => {
 		const input = fs.openSync(input_file, 'r');
 		const out = fs.openSync(output_file, 'w');
 		const err = fs.openSync(config.get<Boolean>("mix_stdout_stderr") ? output_file : err_file, 'w');
 		const startTime = process.hrtime.bigint();
-		const child = spawn(command, args, { stdio: [input, out, err], windowsHide: true });
+		const child = spawn(file, args, { stdio: [input, out, err], windowsHide: true });
 		const pid = child.pid;
 		if (!pid) {
 			resolve({ code: null, time: null, memory: null, message: 'Spawn failed' });
@@ -71,6 +74,10 @@ async function compile(srcFile: string, dstFile: string) {
 		cancellable: false
 	}, async (progress) => {
 		return new Promise<{ code: number, message: string, output: string }>((resolve) => {
+			if (!config_has_changed && file_md5_table.get(srcFile) === getFileMD5(srcFile)) {
+				resolve({ code: 0, message: "file has not changed", output: "" });
+			}
+			file_md5_table.set(srcFile, getFileMD5(srcFile));
 			const compiler = config.get<string>("compiler_path");
 			const args = config.get<string[]>("compile_args");
 			if (!compiler || !args) {
@@ -110,16 +117,12 @@ function getCurrentFile(): string {
 	return "";
 }
 
-function getExecutableFile(sourceFile: string): string {
-	return sourceFile.replace(/\.\w+$/, ".exe");
-}
-
-function getFileBasePath(file: string): string {
-	return path.dirname(file);
-}
-
-function getFileName(file: string): string {
-	return path.basename(file);
+function getFileMD5(file: string): string {
+	const crypto = require('crypto');
+	const hash = crypto.createHash('md5');
+	const input = fs.readFileSync(file);
+	hash.update(input);
+	return hash.digest('hex');
 }
 
 function readOutputFile(outputFile: string): string {
@@ -181,8 +184,8 @@ export async function doSingleTest(testCase: CaseNode) {
 	else {
 		vscode.window.showErrorMessage(`编译失败：${message}`, "查看详细信息").then((value) => {
 			if (value) {
-				const outputDocument=vscode.workspace.openTextDocument({content:output,language:"plaintext"});
-				outputDocument.then((doc)=>{
+				const outputDocument = vscode.workspace.openTextDocument({ content: output, language: "plaintext" });
+				outputDocument.then((doc) => {
 					vscode.window.showTextDocument(doc);
 				});
 			}
@@ -200,7 +203,7 @@ export async function doTest(testCases: CaseNode[], caseViewProvider: CaseViewPr
 		vscode.window.showErrorMessage("未添加测试用例");
 		return;
 	}
-	const { code, message,output } = await compile(sourceFile, executableFile);
+	const { code, message, output } = await compile(sourceFile, executableFile);
 	if (code === 0) {
 		for (let c of testCases) {
 			caseView.reveal(c);
@@ -212,8 +215,8 @@ export async function doTest(testCases: CaseNode[], caseViewProvider: CaseViewPr
 	else {
 		vscode.window.showErrorMessage(`编译失败：${message}`, "查看详细信息").then((value) => {
 			if (value) {
-				const outputDocument=vscode.workspace.openTextDocument({content:output,language:"plaintext"});
-				outputDocument.then((doc)=>{
+				const outputDocument = vscode.workspace.openTextDocument({ content: output, language: "plaintext" });
+				outputDocument.then((doc) => {
 					vscode.window.showTextDocument(doc);
 				});
 			}
