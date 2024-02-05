@@ -49,6 +49,9 @@ export function activate(context: vscode.ExtensionContext) {
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('caseView.testAllCase', async () => {
+		//show caseView
+		
+
 		await doTest(caseViewProvider.getChildren(), caseViewProvider, caseView);
 		showCurrentCaseContent();
 	}));
