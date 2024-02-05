@@ -68,15 +68,15 @@ function runSubprocess(file: string, args: string[], timeoutSec: number, memoryL
 }
 
 async function compile(srcFile: string, dstFile: string) {
+	if (!config_has_changed && file_md5_table.get(srcFile) === getFileMD5(srcFile)) {
+		return { code: 0, message: "No change", output: "" };
+	}
 	const result = await vscode.window.withProgress({
 		location: vscode.ProgressLocation.Notification,
 		title: "正在编译...",
 		cancellable: false
 	}, async (progress) => {
 		return new Promise<{ code: number, message: string, output: string }>((resolve) => {
-			if (!config_has_changed && file_md5_table.get(srcFile) === getFileMD5(srcFile)) {
-				resolve({ code: 0, message: "file has not changed", output: "" });
-			}
 			file_md5_table.set(srcFile, getFileMD5(srcFile));
 			const compiler = config.get<string>("compiler_path");
 			const args = config.get<string[]>("compile_args");
