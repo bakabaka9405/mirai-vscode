@@ -99,12 +99,24 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
+	inputEditor.onLoad(()=>{
+		if(caseViewProvider.current_case){
+			inputEditor.setText(caseViewProvider.current_case.input);
+		}
+	});
+
 	const outputEditor = new Editor(context, true);
 	vscode.window.registerWebviewViewProvider("outputView", outputEditor
 		, { webviewOptions: { retainContextWhenHidden: true } });
 	outputEditor.onDidChange((data) => {
 		if (caseViewProvider.current_case) {
 			caseViewProvider.current_case.output = data;
+		}
+	});
+
+	outputEditor.onLoad(()=>{
+		if(caseViewProvider.current_case){
+			outputEditor.setText(caseViewProvider.current_case.output);
 		}
 	});
 
@@ -121,6 +133,12 @@ export function activate(context: vscode.ExtensionContext) {
 	expectedOutputEditor.onDidChange((data) => {
 		if (caseViewProvider.current_case) {
 			caseViewProvider.current_case.expectedOutput = data;
+		}
+	});
+
+	expectedOutputEditor.onLoad(()=>{
+		if(caseViewProvider.current_case){
+			expectedOutputEditor.setText(caseViewProvider.current_case.expectedOutput);
 		}
 	});
 
