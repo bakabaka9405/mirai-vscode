@@ -37,7 +37,7 @@ export class CaseViewProvider implements vscode.TreeDataProvider<CaseNode> {
 		this.refresh();
 	}
 
-	public addCase() {
+	public onBtnAddCaseClicked() {
 		if (this.cases) {
 			this.cases.push(new CaseNode("Case " + (this.cases.length + 1), vscode.TreeItemCollapsibleState.None));
 			this.refresh();
@@ -47,7 +47,7 @@ export class CaseViewProvider implements vscode.TreeDataProvider<CaseNode> {
 		}
 	}
 
-	public deleteCase(element: CaseNode) {
+	public onBtnDeleteCaseClicked(element: CaseNode) {
 		if (this.cases) {
 			let index = this.cases.data.indexOf(element);
 			if (index >= 0) {
@@ -57,7 +57,7 @@ export class CaseViewProvider implements vscode.TreeDataProvider<CaseNode> {
 		}
 	}
 
-	public async renameCase(element: CaseNode) {
+	public async onBtnRenameCaseClicked(element: CaseNode) {
 		let label = await vscode.window.showInputBox({
 			placeHolder: "New name",
 			value: element.label

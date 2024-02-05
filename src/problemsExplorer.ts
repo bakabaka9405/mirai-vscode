@@ -15,7 +15,7 @@ export class ProblemsExplorerProvider implements vscode.TreeDataProvider<Problem
 		return undefined;
 	}
 
-	public async renameProblem(element: ProblemsItem) {
+	public async onBtnRenameProblemClicked(element: ProblemsItem) {
 		const newName = await vscode.window.showInputBox({
 			placeHolder: "New name",
 			value: element.label
@@ -30,7 +30,7 @@ export class ProblemsExplorerProvider implements vscode.TreeDataProvider<Problem
 		this._onDidChangeTreeData?.fire();
 	}
 
-	public async addProblem(label?: string) {
+	public async onBtnAddProblemClicked(label?: string) {
 		if (!label) {
 			label = await vscode.window.showInputBox({
 				placeHolder: "Problem name",
@@ -42,7 +42,7 @@ export class ProblemsExplorerProvider implements vscode.TreeDataProvider<Problem
 		this.refresh();
 	}
 
-	public deleteProblem(element: ProblemsItem) {
+	public onBtnDeleteProblemClicked(element: ProblemsItem) {
 		let index = this.problems.indexOf(element);
 		if (index >= 0) {
 			this.problems.splice(index, 1);
