@@ -17,49 +17,49 @@ export function activate(context: vscode.ExtensionContext) {
 	// ProblemsExplorer
 	const problemsExplorerProvider = new ProblemsExplorerProvider();
 	problemsExplorerView = vscode.window.createTreeView('problemsExplorer', { treeDataProvider: problemsExplorerProvider });
-	vscode.window.registerTreeDataProvider('problemsExplorer', problemsExplorerProvider);
-	vscode.commands.registerCommand('problemsExplorer.addProblem', () => {
+	context.subscriptions.push(vscode.window.registerTreeDataProvider('problemsExplorer', problemsExplorerProvider));
+	context.subscriptions.push(vscode.commands.registerCommand('problemsExplorer.addProblem', () => {
 		problemsExplorerProvider.onBtnAddProblemClicked();
-	});
+	}));
 	vscode.commands.registerCommand('problemsExplorer.addProblemFromFolder', () => { });
-	vscode.commands.registerCommand('problemsExplorer.renameProblem', (element: ProblemsItem) => {
+	context.subscriptions.push(vscode.commands.registerCommand('problemsExplorer.renameProblem', (element: ProblemsItem) => {
 		problemsExplorerProvider.onBtnRenameProblemClicked(element);
-	});
-	vscode.commands.registerCommand('problemsExplorer.deleteProblem', (element: ProblemsItem) => {
+	}));
+	context.subscriptions.push(vscode.commands.registerCommand('problemsExplorer.deleteProblem', (element: ProblemsItem) => {
 		problemsExplorerProvider.onBtnDeleteProblemClicked(element);
-	});
-	vscode.commands.registerCommand('problemsExplorer.switchProblem', async (element: ProblemsItem) => {
+	}));
+	context.subscriptions.push(vscode.commands.registerCommand('problemsExplorer.switchProblem', async (element: ProblemsItem) => {
 		await saveCurrentCaseContent();
 		caseViewProvider.switchCaseGroup(element.caseGroup);
 		showCurrentCaseContent();
-	});
+	}));
 
 	// CaseView
 	const caseViewProvider = new CaseViewProvider();
 	caseView = vscode.window.createTreeView('caseView', { treeDataProvider: caseViewProvider });
-	vscode.window.registerTreeDataProvider('caseView', caseViewProvider);
-	vscode.commands.registerCommand('caseView.addCase', () => {
+	context.subscriptions.push(vscode.window.registerTreeDataProvider('caseView', caseViewProvider));
+	context.subscriptions.push(vscode.commands.registerCommand('caseView.addCase', () => {
 		caseViewProvider.onBtnAddCaseClicked();
-	});
-	vscode.commands.registerCommand('caseView.deleteCase', (element: CaseNode) => {
+	}));
+	context.subscriptions.push(vscode.commands.registerCommand('caseView.deleteCase', (element: CaseNode) => {
 		caseViewProvider.onBtnDeleteCaseClicked(element);
-	});
-	vscode.commands.registerCommand('caseView.renameCase', (element: CaseNode) => {
+	}));
+	context.subscriptions.push(vscode.commands.registerCommand('caseView.renameCase', (element: CaseNode) => {
 		caseViewProvider.onBtnRenameCaseClicked(element);
-	});
+	}));
 
-	vscode.commands.registerCommand('caseView.testAllCase', async () => {
+	context.subscriptions.push(vscode.commands.registerCommand('caseView.testAllCase', async () => {
 		await doTest(caseViewProvider.getChildren(), caseViewProvider, caseView);
 		showCurrentCaseContent();
-	});
+	}));
 
-	vscode.commands.registerCommand('caseView.testSingleCase', async (element: CaseNode) => {
+	context.subscriptions.push(vscode.commands.registerCommand('caseView.testSingleCase', async (element: CaseNode) => {
 		caseView.reveal(element);
 		element.iconPath = undefined;
 		caseViewProvider.refresh(element);
 		await doSingleTest(element);
 		caseViewProvider.refresh(element);
-	});
+	}));
 
 	async function saveCurrentCaseContent() {
 		if (inputEditor && outputEditor && expectedOutputEditor && caseViewProvider.current_case) {
@@ -84,65 +84,65 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	}
 
-	vscode.commands.registerCommand('caseView.switchCase', async (element: CaseNode | undefined) => {
+	context.subscriptions.push(vscode.commands.registerCommand('caseView.switchCase', async (element: CaseNode | undefined) => {
 		await saveCurrentCaseContent();
 		caseViewProvider.current_case = element;
 		showCurrentCaseContent();
-	});
+	}));
 
 	const inputEditor = new Editor(context);
-	vscode.window.registerWebviewViewProvider("inputView", inputEditor
-		, { webviewOptions: { retainContextWhenHidden: true } });
+	context.subscriptions.push(vscode.window.registerWebviewViewProvider("inputView", inputEditor
+		, { webviewOptions: { retainContextWhenHidden: true } }));
 	inputEditor.onDidChange((data) => {
 		if (caseViewProvider.current_case) {
 			caseViewProvider.current_case.input = data;
 		}
 	});
 
-	inputEditor.onLoad(()=>{
-		if(caseViewProvider.current_case){
+	inputEditor.onLoad(() => {
+		if (caseViewProvider.current_case) {
 			inputEditor.setText(caseViewProvider.current_case.input);
 		}
 	});
 
 	const outputEditor = new Editor(context, true);
-	vscode.window.registerWebviewViewProvider("outputView", outputEditor
-		, { webviewOptions: { retainContextWhenHidden: true } });
+	context.subscriptions.push(vscode.window.registerWebviewViewProvider("outputView", outputEditor
+		, { webviewOptions: { retainContextWhenHidden: true } }));
 	outputEditor.onDidChange((data) => {
 		if (caseViewProvider.current_case) {
 			caseViewProvider.current_case.output = data;
 		}
 	});
 
-	outputEditor.onLoad(()=>{
-		if(caseViewProvider.current_case){
+	outputEditor.onLoad(() => {
+		if (caseViewProvider.current_case) {
 			outputEditor.setText(caseViewProvider.current_case.output);
 		}
 	});
 
-	vscode.commands.registerCommand('outputView.copyOutput', async () => {
+	context.subscriptions.push(vscode.commands.registerCommand('outputView.copyOutput', async () => {
 		const content = await outputEditor.getText();
 		await vscode.env.clipboard.writeText(content);
 		vscode.window.showInformationMessage("已复制");
-	});
+	}));
 
 	//expectedOutputView
 	const expectedOutputEditor = new Editor(context);
-	vscode.window.registerWebviewViewProvider("expectedOutputView", expectedOutputEditor
-		, { webviewOptions: { retainContextWhenHidden: true } });
+	context.subscriptions.push(vscode.window.registerWebviewViewProvider("expectedOutputView", expectedOutputEditor
+		, { webviewOptions: { retainContextWhenHidden: true } }));
 	expectedOutputEditor.onDidChange((data) => {
 		if (caseViewProvider.current_case) {
 			caseViewProvider.current_case.expectedOutput = data;
 		}
 	});
 
-	expectedOutputEditor.onLoad(()=>{
-		if(caseViewProvider.current_case){
+	expectedOutputEditor.onLoad(() => {
+		if (caseViewProvider.current_case) {
 			expectedOutputEditor.setText(caseViewProvider.current_case.expectedOutput);
 		}
 	});
 
-	vscode.commands.registerCommand('expectedOutputView.contrast', async () => {
+	context.subscriptions.push(vscode.commands.registerCommand('expectedOutputView.contrast', async () => {
 		const os = require('os');
 		let file1 = path.join(os.tmpdir(), 'contrast_lt.txt');
 		let file2 = path.join(os.tmpdir(), 'contrast_rt.txt');
@@ -156,7 +156,7 @@ export function activate(context: vscode.ExtensionContext) {
 		let uri2 = vscode.Uri.file(file2);
 
 		vscode.commands.executeCommand('vscode.diff', uri1, uri2, "输出↔期望输出");
-	});
+	}));
 
 	//load config
 	let config = loadConfig();

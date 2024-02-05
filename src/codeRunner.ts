@@ -147,7 +147,7 @@ function prepareForCompile(): { sourceFile: string, executableFile: string } {
 	return { sourceFile, executableFile };
 }
 
-async function doSingleTestimpl(testCase: CaseNode, executableFile: string) {
+async function doSingleTestImpl(testCase: CaseNode, executableFile: string) {
 	fs.writeFileSync(input_file, testCase.input);
 	let { code, message } = await runSubprocess(executableFile, [], 1, 256);
 	testCase.output = readOutputFile(output_file);
@@ -170,6 +170,8 @@ async function doSingleTestimpl(testCase: CaseNode, executableFile: string) {
 	}
 }
 
+let outputChannel=vscode.window.createOutputChannel("Mirai-vscode：编译输出");
+
 export async function doSingleTest(testCase: CaseNode) {
 	const { sourceFile, executableFile } = prepareForCompile();
 	if (sourceFile == "") {
@@ -179,15 +181,13 @@ export async function doSingleTest(testCase: CaseNode) {
 	const { code, message, output } = await compile(sourceFile, executableFile);
 	console.log(message);
 	if (code === 0) {
-		await doSingleTestimpl(testCase, executableFile);
+		await doSingleTestImpl(testCase, executableFile);
 	}
 	else {
 		vscode.window.showErrorMessage(`编译失败：${message}`, "查看详细信息").then((value) => {
 			if (value) {
-				const outputDocument = vscode.workspace.openTextDocument({ content: output, language: "plaintext" });
-				outputDocument.then((doc) => {
-					vscode.window.showTextDocument(doc);
-				});
+				outputChannel.appendLine(output);
+				outputChannel.show();
 			}
 		});
 	}
@@ -207,7 +207,7 @@ export async function doTest(testCases: CaseNode[], caseViewProvider: CaseViewPr
 	if (code === 0) {
 		for (let c of testCases) {
 			caseView.reveal(c);
-			await doSingleTestimpl(c, executableFile);
+			await doSingleTestImpl(c, executableFile);
 			caseViewProvider.refresh(c);
 		}
 		vscode.window.showInformationMessage("测试完成");
@@ -215,10 +215,8 @@ export async function doTest(testCases: CaseNode[], caseViewProvider: CaseViewPr
 	else {
 		vscode.window.showErrorMessage(`编译失败：${message}`, "查看详细信息").then((value) => {
 			if (value) {
-				const outputDocument = vscode.workspace.openTextDocument({ content: output, language: "plaintext" });
-				outputDocument.then((doc) => {
-					vscode.window.showTextDocument(doc);
-				});
+				outputChannel.appendLine(output);
+				outputChannel.show();
 			}
 		});
 	}
