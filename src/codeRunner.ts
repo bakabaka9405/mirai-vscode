@@ -19,8 +19,7 @@ vscode.workspace.onDidChangeConfiguration((e) => {
 		config_has_changed = true;
 	}
 });
-
-function runSubprocess(file: string, args: string[], timeoutSec: number, memoryLimitMB: number, input: string)
+function runSubprocess(file: string, args: string[], timeoutSec: number, memoryLimitMB: number, input: string, token: vscode.CancellationToken)
 	: Promise<{ code: number | null, time: number | null, memory: number | null, message: string, output: string | null }> {
 	return new Promise((resolve) => {
 		let output = "";
@@ -38,6 +37,18 @@ function runSubprocess(file: string, args: string[], timeoutSec: number, memoryL
 				output
 			});
 		}, timeoutSec * 1000);
+
+		//listen cancellationToken
+		token.onCancellationRequested(() => {
+			child.kill();
+			resolve({
+				code: null,
+				time: null,
+				memory: null,
+				message: 'Cancelled',
+				output
+			});
+		});
 
 		child.on('exit', (code) => {
 			clearTimeout(timeoutId);
@@ -77,8 +88,8 @@ async function compile(srcFile: string, dstFile: string) {
 	const result = await vscode.window.withProgress({
 		location: vscode.ProgressLocation.Notification,
 		title: "正在编译...",
-		cancellable: false
-	}, async (progress) => {
+		cancellable: true
+	}, async (progress, token) => {
 		return new Promise<{ code: number, message: string, output: string }>((resolve) => {
 			const compiler = config.get<string>("compiler_path");
 			const args = config.get<string[]>("compile_args");
@@ -107,6 +118,10 @@ async function compile(srcFile: string, dstFile: string) {
 				else {
 					resolve({ code: -1, message: `Compilation failed`, output });
 				}
+			});
+			token.onCancellationRequested(() => {
+				child.kill();
+				resolve({ code: -1, message: `Cancelled`, output: "" });
 			});
 		});
 	});
@@ -146,10 +161,10 @@ function prepareForCompile(): { sourceFile: string, executableFile: string } {
 	return { sourceFile, executableFile };
 }
 
-async function doSingleTestImpl(testCase: CaseNode, executableFile: string) {
+async function doSingleTestImpl(testCase: CaseNode, executableFile: string, token: vscode.CancellationToken) {
 	let timeOutSec = config.get<number>("default_timeout");
 	if (!timeOutSec) timeOutSec = 1;
-	let { code, time, memory, message, output } = await runSubprocess(executableFile, [], timeOutSec, 256, testCase.input);
+	let { code, time, memory, message, output } = await runSubprocess(executableFile, [], timeOutSec, 256, testCase.input, token);
 	testCase.output = output || "";
 	if (code === 0) {
 		if (compareOutput(testCase.output, testCase.expectedOutput)) {
@@ -165,7 +180,10 @@ async function doSingleTestImpl(testCase: CaseNode, executableFile: string) {
 	else if (code == null && message == 'Memory limit exceeded') {
 		testCase.iconPath = { light: mle_icon, dark: mle_icon };
 	}
-	else if ((code == null && message == 'Runtime Error' || code !== 0)) {
+	else if (code == null && message == 'Cancelled') {
+		testCase.iconPath = undefined;
+	}
+	else if ((code == null && message == 'Runtime Error') || code !== 0) {
 		testCase.iconPath = { light: re_icon, dark: re_icon };
 	}
 }
@@ -181,7 +199,14 @@ export async function doSingleTest(testCase: CaseNode) {
 	const { code, message, output } = await compile(sourceFile, executableFile);
 	console.log(message);
 	if (code === 0) {
-		await doSingleTestImpl(testCase, executableFile);
+		const result = await vscode.window.withProgress({
+			location: vscode.ProgressLocation.Notification,
+			title: "正在测试...",
+			cancellable: true
+		}, async (progress, token) => {
+			await doSingleTestImpl(testCase, executableFile, token);
+			return !token.isCancellationRequested;
+		});
 	}
 	else {
 		vscode.window.showErrorMessage(`编译失败：${message}`, "查看详细信息").then((value) => {
@@ -206,12 +231,22 @@ export async function doTest(testCases: CaseNode[], caseViewProvider: CaseViewPr
 	}
 	const { code, message, output } = await compile(sourceFile, executableFile);
 	if (code === 0) {
-		for (let c of testCases) {
-			caseView.reveal(c);
-			await doSingleTestImpl(c, executableFile);
-			caseViewProvider.refresh(c);
-		}
-		let disposable=vscode.window.showInformationMessage("测试完成");
+		const result = await vscode.window.withProgress({
+			location: vscode.ProgressLocation.Notification,
+			title: "正在测试...",
+			cancellable: true
+		}, async (progress, token) => {
+			for (let c of testCases) {
+				if (token.isCancellationRequested) break;
+				caseView.reveal(c);
+				await doSingleTestImpl(c, executableFile, token);
+				caseViewProvider.refresh(c);
+				progress.report({ increment: 100 / testCases.length });
+			}
+			return !token.isCancellationRequested;
+		});
+		if (result) vscode.window.showInformationMessage("测试完成");
+		else vscode.window.showInformationMessage("测试中断");
 	}
 	else {
 		vscode.window.showErrorMessage(`编译失败：${message}`, "查看详细信息").then((value) => {
