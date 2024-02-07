@@ -147,7 +147,9 @@ function prepareForCompile(): { sourceFile: string, executableFile: string } {
 }
 
 async function doSingleTestImpl(testCase: CaseNode, executableFile: string) {
-	let { code, time, memory, message, output } = await runSubprocess(executableFile, [], 1, 256, testCase.input);
+	let timeOutSec = config.get<number>("default_timeout");
+	if (!timeOutSec) timeOutSec = 1;
+	let { code, time, memory, message, output } = await runSubprocess(executableFile, [], timeOutSec, 256, testCase.input);
 	testCase.output = output || "";
 	if (code === 0) {
 		if (compareOutput(testCase.output, testCase.expectedOutput)) {
@@ -209,7 +211,7 @@ export async function doTest(testCases: CaseNode[], caseViewProvider: CaseViewPr
 			await doSingleTestImpl(c, executableFile);
 			caseViewProvider.refresh(c);
 		}
-		vscode.window.showInformationMessage("测试完成");
+		let disposable=vscode.window.showInformationMessage("测试完成");
 	}
 	else {
 		vscode.window.showErrorMessage(`编译失败：${message}`, "查看详细信息").then((value) => {
