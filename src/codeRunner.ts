@@ -9,14 +9,13 @@ const wa_icon = vscode.Uri.file(path.join(__dirname, '..', 'media', 'error.svg')
 const re_icon = vscode.Uri.file(path.join(__dirname, '..', 'media', 'bug.svg'));
 const tle_icon = vscode.Uri.file(path.join(__dirname, '..', 'media', 'clock.svg'));
 const mle_icon = vscode.Uri.file(path.join(__dirname, '..', 'media', 'memory.svg'));
-let config_has_changed = false;
 let file_md5_table = new Map<string, string>();
 
 let config = vscode.workspace.getConfiguration("mirai-vscode");
 vscode.workspace.onDidChangeConfiguration((e) => {
 	if (e.affectsConfiguration("mirai-vscode")) {
 		config = vscode.workspace.getConfiguration("mirai-vscode");
-		config_has_changed = true;
+		file_md5_table.clear();
 	}
 });
 function runSubprocess(file: string, args: string[], timeoutSec: number, memoryLimitMB: number, input: string, token: vscode.CancellationToken)
@@ -82,7 +81,7 @@ function runSubprocess(file: string, args: string[], timeoutSec: number, memoryL
 }
 
 async function compile(srcFile: string, dstFile: string) {
-	if (!config_has_changed && file_md5_table.get(srcFile) === getFileMD5(srcFile)) {
+	if (file_md5_table.get(srcFile) === getFileMD5(srcFile)) {
 		return Promise.resolve({ code: 0, message: "No change", output: "" });
 	}
 	const result = await vscode.window.withProgress({
@@ -237,7 +236,9 @@ export async function doTest(testCases: CaseNode[], caseViewProvider: CaseViewPr
 			cancellable: true
 		}, async (progress, token) => {
 			for (let c of testCases) {
-				if (token.isCancellationRequested) break;
+				if (token.isCancellationRequested){
+					c.iconPath=undefined;
+				}
 				caseView.reveal(c);
 				await doSingleTestImpl(c, executableFile, token);
 				caseViewProvider.refresh(c);
