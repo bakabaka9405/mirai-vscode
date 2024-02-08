@@ -38,6 +38,9 @@ export function activate(context: vscode.ExtensionContext) {
 	const caseViewProvider = new CaseViewProvider();
 	caseView = vscode.window.createTreeView('caseView', { treeDataProvider: caseViewProvider });
 	context.subscriptions.push(vscode.window.registerTreeDataProvider('caseView', caseViewProvider));
+	context.subscriptions.push(vscode.commands.registerCommand('caseView.setting',()=>{
+		vscode.commands.executeCommand('workbench.action.openSettings', '@ext:bakabaka9405.mirai-vscode');
+	}));
 	context.subscriptions.push(vscode.commands.registerCommand('caseView.addCase', () => {
 		caseViewProvider.onBtnAddCaseClicked();
 	}));
@@ -49,14 +52,13 @@ export function activate(context: vscode.ExtensionContext) {
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('caseView.testAllCase', async () => {
-		//show caseView
-		
-
+		await vscode.commands.executeCommand('workbench.action.files.save');
 		await doTest(caseViewProvider.getChildren(), caseViewProvider, caseView);
 		showCurrentCaseContent();
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('caseView.testSingleCase', async (element: CaseNode) => {
+		await vscode.commands.executeCommand('workbench.action.files.save');
 		caseView.reveal(element);
 		element.iconPath = undefined;
 		caseViewProvider.refresh(element);
