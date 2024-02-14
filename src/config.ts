@@ -9,7 +9,9 @@ export function saveConfig(problems: ProblemsItem[]) {
 		problems: problems.map((problem) => {
 			return {
 				label: problem.label,
-				cases: problem.caseGroup.data.map((c) => {
+				group: problem.group,
+				url: problem.url,
+				cases: problem.caseGroup?.data.map((c) => {
 					return {
 						label: c.label,
 						input: c.input,

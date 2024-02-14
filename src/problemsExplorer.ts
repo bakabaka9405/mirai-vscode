@@ -1,19 +1,50 @@
 import * as vscode from 'vscode'
 import { CaseGroup } from './caseView'
 
+enum ProblemGroupingMethod {
+	None,
+	Group,
+}
+
 export class ProblemsExplorerProvider implements vscode.TreeDataProvider<ProblemsItem> {
 	private _onDidChangeTreeData: vscode.EventEmitter<ProblemsItem | undefined | void> = new vscode.EventEmitter<ProblemsItem | undefined | void>();
 	readonly onDidChangeTreeData: vscode.Event<ProblemsItem | undefined | void> = this._onDidChangeTreeData.event;
 	public problems: ProblemsItem[] = [];
+	private groupingCache: ProblemsItem[] = [];
+	private problemsChanged: boolean = false;
+	private groupingMethod: ProblemGroupingMethod = ProblemGroupingMethod.None;
 	getTreeItem(element: ProblemsItem): vscode.TreeItem | Thenable<vscode.TreeItem> {
 		return element;
 	}
 	getChildren(element?: ProblemsItem | undefined): vscode.ProviderResult<ProblemsItem[]> {
-		return this.problems;
+		if (element) {
+			return element.getChildren();
+		}
+		if (this.groupingMethod == ProblemGroupingMethod.None) {
+			return this.problems;
+		}
+		else {
+			if (this.problemsChanged) {
+				let groups: Map<string, ProblemsItem[]> = new Map();
+				for (let problem of this.problems) {
+					if (!groups.has(problem.group || "其他")) {
+						groups.set(problem.group || "其他", []);
+					}
+					groups.get(problem.group || "其他")?.push(problem);
+				}
+				this.groupingCache = [];
+				groups.forEach((value, key) => {
+					this.groupingCache.push(new ProblemsItem(key, undefined, undefined, value));
+				});
+				this.problemsChanged = false;
+			}
+			return this.groupingCache;
+		}
 	}
 	getParent?(element: ProblemsItem): vscode.ProviderResult<ProblemsItem> {
 		return undefined;
 	}
+
 
 	public async onBtnRenameProblemClicked(element: ProblemsItem) {
 		const newName = await vscode.window.showInputBox({
@@ -27,6 +58,7 @@ export class ProblemsExplorerProvider implements vscode.TreeDataProvider<Problem
 	}
 
 	public refresh() {
+		this.problemsChanged = true;
 		this._onDidChangeTreeData?.fire();
 	}
 
@@ -38,40 +70,72 @@ export class ProblemsExplorerProvider implements vscode.TreeDataProvider<Problem
 			});
 		}
 		if (!label) return;
-		this.problems.push(new ProblemsItem(label, vscode.TreeItemCollapsibleState.None));
+		this.problems.push(new ProblemsItem(label));
 		this.refresh();
 	}
 
 	public onBtnDeleteProblemClicked(element: ProblemsItem) {
-		let index = this.problems.indexOf(element);
-		if (index >= 0) {
-			this.problems.splice(index, 1);
+		if (element.children) {
+			for (let child of element.children) {
+				let index = this.problems.indexOf(child);
+				if (index >= 0) {
+					this.problems.splice(index, 1);
+				}
+			}
 			this.refresh();
 		}
-		else console.log("Problem not found")
+		else {
+			let index = this.problems.indexOf(element);
+			if (index >= 0) {
+				this.problems.splice(index, 1);
+				this.refresh();
+			}
+			else console.log("Problem not found")
+		}
+	}
+
+	public onBtnSwitchGroupingMethodClicked() {
+		this.groupingMethod = (this.groupingMethod + 1) % 2;
+		this.refresh();
 	}
 }
+
 
 export class ProblemsItem extends vscode.TreeItem {
 	constructor(
 		public label: string,
-		public readonly collapsibleState: vscode.TreeItemCollapsibleState,
-		public readonly command?: vscode.Command,
+		public group?: string,
+		public url?: string,
+		public children?: ProblemsItem[]
 	) {
-		super(label, collapsibleState);
-
-		this.command = {
-			command: 'problemsExplorer.switchProblem',
-			title: '切换试题',
-			arguments: [this]
-		};
+		super(label, vscode.TreeItemCollapsibleState.None);
+		if (!children) {
+			this.command = {
+				command: 'problemsExplorer.switchProblem',
+				title: '切换试题',
+				arguments: [this]
+			};
+			this.caseGroup = new CaseGroup();
+			this.contextValue = "problem";
+		}
+		else {
+			this.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+			this.contextValue = "problemsGroup";
+		}
 	}
 
-	public caseGroup: CaseGroup = new CaseGroup();
+	public caseGroup?: CaseGroup;
 
 	setLabel(newLabel: string) {
 		this.label = newLabel;
+		if (this.children) {
+			for (let child of this.children) {
+				child.group = newLabel;
+			}
+		}
 	}
 
-	contextValue = "problem"
+	getChildren(): ProblemsItem[] {
+		return this.children || [];
+	}
 }

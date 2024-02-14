@@ -17,8 +17,8 @@ export function startListen(problemsExplorerProvider: ProblemsExplorerProvider) 
 		//console.log('Full body:');
 		//console.log(JSON.stringify(data, null, 4));
 		let cnt = 0;
-		let p = new ProblemsItem(data.name, vscode.TreeItemCollapsibleState.None);
-		p.caseGroup.data = data.tests.map((c: any) => {
+		let p = new ProblemsItem(data.name, data.group, data.url);
+		p.caseGroup!.data = data.tests.map((c: any) => {
 			return new CaseNode("Case " + (++cnt), vscode.TreeItemCollapsibleState.None, undefined, c.input, "", c.output);
 		});
 

@@ -96,9 +96,23 @@
 				"icon": "media/folder-search.svg"
 			},
 			{
+				"command":"problemsExplorer.switchGroupingMethod",
+				"title":"切换分组方式",
+				"icon":"media/tree-list.svg"
+			},
+			{
 				"command": "problemsExplorer.deleteProblem",
 				"title": "删除试题",
 				"icon": "media/delete.svg"
+			},
+			{
+				"command": "problemsExplorer.openProblemUrl",
+				"title": "打开试题链接",
+				"icon": "media/share.svg"
+			},
+			{
+				"command": "problemsExplorer.copyProblemUrl",
+				"title": "复制试题链接"
 			},
 			{
 				"command": "caseView.addCase",
@@ -168,6 +182,11 @@
 					"group": "navigation"
 				},
 				{
+					"command":"problemsExplorer.switchGroupingMethod",
+					"when":"view==problemsExplorer",
+					"group":"navigation"
+				},
+				{
 					"command": "caseView.addCase",
 					"when": "view==caseView",
 					"group": "navigation"
@@ -201,13 +220,22 @@
 			"view/item/context": [
 				{
 					"command": "problemsExplorer.renameProblem",
-					"when": "view==problemsExplorer && viewItem==problem",
+					"when": "view==problemsExplorer && (viewItem==problem||viewItem==problemsGroup)",
 					"group": "inline"
 				},
 				{
 					"command": "problemsExplorer.deleteProblem",
+					"when": "view==problemsExplorer && (viewItem==problem||viewItem==problemsGroup)",
+					"group": "inline"
+				},
+				{
+					"command": "problemsExplorer.openProblemUrl",
 					"when": "view==problemsExplorer && viewItem==problem",
 					"group": "inline"
+				},
+				{
+					"command": "problemsExplorer.copyProblemUrl",
+					"when": "view==problemsExplorer && viewItem==problem"
 				},
 				{
 					"command": "caseView.testSingleCase",

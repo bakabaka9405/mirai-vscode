@@ -28,9 +28,29 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(vscode.commands.registerCommand('problemsExplorer.deleteProblem', (element: ProblemsItem) => {
 		problemsExplorerProvider.onBtnDeleteProblemClicked(element);
 	}));
+	context.subscriptions.push(vscode.commands.registerCommand('problemsExplorer.openProblemUrl', (element: ProblemsItem) => {
+		if (element.url) {
+			vscode.env.openExternal(vscode.Uri.parse(element.url));
+		}
+		else {
+			vscode.window.showErrorMessage("找不到该题目的链接");
+		}
+	}));
+	context.subscriptions.push(vscode.commands.registerCommand('problemsExplorer.copyProblemUrl', (element: ProblemsItem) => {
+		if (element.url) {
+			vscode.env.clipboard.writeText(element.url);
+			vscode.window.showInformationMessage("已复制");
+		}
+		else {
+			vscode.window.showErrorMessage("找不到该题目的链接");
+		}
+	}));
+	context.subscriptions.push(vscode.commands.registerCommand('problemsExplorer.switchGroupingMethod', () => {
+		problemsExplorerProvider.onBtnSwitchGroupingMethodClicked();
+	}));
 	context.subscriptions.push(vscode.commands.registerCommand('problemsExplorer.switchProblem', async (element: ProblemsItem) => {
 		await saveCurrentCaseContent();
-		caseViewProvider.switchCaseGroup(element.caseGroup);
+		caseViewProvider.switchCaseGroup(element.caseGroup!);
 		showCurrentCaseContent();
 	}));
 
@@ -38,7 +58,7 @@ export function activate(context: vscode.ExtensionContext) {
 	const caseViewProvider = new CaseViewProvider();
 	caseView = vscode.window.createTreeView('caseView', { treeDataProvider: caseViewProvider });
 	context.subscriptions.push(vscode.window.registerTreeDataProvider('caseView', caseViewProvider));
-	context.subscriptions.push(vscode.commands.registerCommand('caseView.setting',()=>{
+	context.subscriptions.push(vscode.commands.registerCommand('caseView.setting', () => {
 		vscode.commands.executeCommand('workbench.action.openSettings', '@ext:bakabaka9405.mirai-vscode');
 	}));
 	context.subscriptions.push(vscode.commands.registerCommand('caseView.addCase', () => {
@@ -52,13 +72,13 @@ export function activate(context: vscode.ExtensionContext) {
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('caseView.testAllCase', async () => {
-		await vscode.commands.executeCommand('workbench.action.files.save');
+		await vscode.workspace.saveAll(false);
 		await doTest(caseViewProvider.getChildren(), caseViewProvider, caseView);
 		showCurrentCaseContent();
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('caseView.testSingleCase', async (element: CaseNode) => {
-		await vscode.commands.executeCommand('workbench.action.files.save');
+		await vscode.workspace.saveAll(false);
 		caseView.reveal(element);
 		element.iconPath = undefined;
 		caseViewProvider.refresh(element);
@@ -165,9 +185,9 @@ export function activate(context: vscode.ExtensionContext) {
 
 	//load config
 	let config = loadConfig();
-	problemsExplorerProvider.problems = config.problems.map((problem: { label: string; cases: CaseGroup; }) => {
-		let p = new ProblemsItem(problem.label, vscode.TreeItemCollapsibleState.None);
-		p.caseGroup.data = Object.values(problem.cases).map((c) => {
+	problemsExplorerProvider.problems = config.problems.map((problem: { label: string; cases: CaseGroup; group?: string, url?: string }) => {
+		let p = new ProblemsItem(problem.label, problem.group, problem.url);
+		p.caseGroup!.data = Object.values(problem.cases).map((c) => {
 			return new CaseNode(c.label, vscode.TreeItemCollapsibleState.None, undefined, c.input, "", c.expectedOutput);
 		});
 		return p;
