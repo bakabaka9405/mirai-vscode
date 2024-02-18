@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { ProblemsItem } from './problemsExplorer';
+import { ProblemsExplorerProvider, ProblemsItem, ProblemsGroupingMethod } from './problemsExplorer';
 import { CaseGroup, CaseNode } from './caseView';
 
-export function saveConfig(problems: ProblemsItem[]) {
+export function saveConfig(provider: ProblemsExplorerProvider) {
+	let problems: ProblemsItem[] = provider.problems;
 	let config = {
 		problems: problems.map((problem) => {
 			return {
@@ -19,7 +20,8 @@ export function saveConfig(problems: ProblemsItem[]) {
 					}
 				})
 			}
-		})
+		}),
+		groupingMethod: ProblemsGroupingMethod[provider.groupingMethod]
 	}
 
 	if (vscode.workspace.workspaceFolders) {

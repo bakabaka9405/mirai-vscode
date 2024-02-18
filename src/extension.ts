@@ -189,6 +189,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	//load config
 	let config = loadConfig();
+	problemsExplorerProvider.groupingMethod=config.groupingMethod||"None";
 	problemsExplorerProvider.problems = config.problems.map((problem: { label: string; cases: CaseGroup; group?: string, url?: string }) => {
 		let p = new ProblemsItem(problem.label, problem.group, problem.url);
 		p.caseGroup!.data = Object.values(problem.cases).map((c) => {
@@ -196,10 +197,10 @@ export function activate(context: vscode.ExtensionContext) {
 		});
 		return p;
 	});
-
+	problemsExplorerProvider.refresh();
 	//save config
 	let timer = setInterval(() => {
-		saveConfig(problemsExplorerProvider.problems);
+		saveConfig(problemsExplorerProvider);
 	}, 5000);
 
 	startListen(problemsExplorerProvider);

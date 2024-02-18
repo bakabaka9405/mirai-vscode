@@ -1,9 +1,9 @@
 import * as vscode from 'vscode'
 import { CaseGroup } from './caseView'
 
-enum ProblemGroupingMethod {
-	None,
-	Group,
+export enum ProblemsGroupingMethod {
+	None = `None`,
+	Group = 'Group',
 }
 
 export class ProblemsExplorerProvider implements vscode.TreeDataProvider<ProblemsItem> {
@@ -12,7 +12,7 @@ export class ProblemsExplorerProvider implements vscode.TreeDataProvider<Problem
 	public problems: ProblemsItem[] = [];
 	private groupingCache: ProblemsItem[] = [];
 	private problemsChanged: boolean = false;
-	private groupingMethod: ProblemGroupingMethod = ProblemGroupingMethod.None;
+	public groupingMethod: ProblemsGroupingMethod = ProblemsGroupingMethod.None;
 	getTreeItem(element: ProblemsItem): vscode.TreeItem | Thenable<vscode.TreeItem> {
 		return element;
 	}
@@ -20,7 +20,7 @@ export class ProblemsExplorerProvider implements vscode.TreeDataProvider<Problem
 		if (element) {
 			return element.getChildren();
 		}
-		if (this.groupingMethod == ProblemGroupingMethod.None) {
+		if (this.groupingMethod == ProblemsGroupingMethod.None) {
 			return this.problems;
 		}
 		else {
@@ -95,7 +95,12 @@ export class ProblemsExplorerProvider implements vscode.TreeDataProvider<Problem
 	}
 
 	public onBtnSwitchGroupingMethodClicked() {
-		this.groupingMethod = (this.groupingMethod + 1) % 2;
+		if (this.groupingMethod == ProblemsGroupingMethod.None) {
+			this.groupingMethod = ProblemsGroupingMethod.Group;
+		}
+		else {
+			this.groupingMethod = ProblemsGroupingMethod.None;
+		}
 		this.refresh();
 	}
 }
