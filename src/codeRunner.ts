@@ -12,10 +12,14 @@ const mle_icon = vscode.Uri.file(path.join(__dirname, '..', 'media', 'memory.svg
 let file_md5_table = new Map<string, string>();
 
 let config = vscode.workspace.getConfiguration("mirai-vscode");
+
+export function clearCompileCache(){
+	file_md5_table.clear();
+}
 vscode.workspace.onDidChangeConfiguration((e) => {
 	if (e.affectsConfiguration("mirai-vscode")) {
 		config = vscode.workspace.getConfiguration("mirai-vscode");
-		file_md5_table.clear();
+		clearCompileCache();
 	}
 });
 function runSubprocess(file: string, args: string[], timeoutSec: number, memoryLimitMB: number, input: string, token: vscode.CancellationToken)

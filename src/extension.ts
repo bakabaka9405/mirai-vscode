@@ -5,7 +5,7 @@ import * as path from 'path';
 import { CaseViewProvider, CaseNode, CaseGroup } from './caseView'
 import { ProblemsExplorerProvider, ProblemsItem } from './problemsExplorer'
 import { loadConfig, saveConfig } from './config'
-import { doTest, doSingleTest } from './codeRunner'
+import { doTest, doSingleTest, clearCompileCache } from './codeRunner'
 import { startListen } from './listener';
 import { start } from 'repl';
 import { Editor } from './editor'
@@ -69,6 +69,10 @@ export function activate(context: vscode.ExtensionContext) {
 	}));
 	context.subscriptions.push(vscode.commands.registerCommand('caseView.renameCase', (element: CaseNode) => {
 		caseViewProvider.onBtnRenameCaseClicked(element);
+	}));
+	context.subscriptions.push(vscode.commands.registerCommand('caseView.clearCompileCache', () => {
+		clearCompileCache();
+		vscode.window.showInformationMessage("已清除");
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('caseView.testAllCase', async () => {
