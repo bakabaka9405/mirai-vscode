@@ -14,7 +14,9 @@
 	"categories": [
 		"Other"
 	],
-	"activationEvents": [],
+	"activationEvents": [
+		"onLanguage:cpp"
+	],
 	"main": "./out/extension.js",
 	"repository": {
 		"type": "git",
@@ -172,6 +174,10 @@
 				"command": "caseView.switchCase",
 				"title": "切换样例",
 				"group": "navigation"
+			},
+			{
+				"command": "mirai-vscode.onBtnTestPresetClicked",
+				"title": "编译测试预设"
 			}
 		],
 		"menus": {
@@ -309,6 +315,67 @@
 						"-std=c++20",
 						"-O2"
 					]
+				},
+				"mirai-vscode.test_presets": {
+					"type": "array",
+					"description": "编译测试预设",
+					"items": {
+						"type": "object",
+						"properties": {
+							"name": {
+								"type": "string",
+								"description": "名称"
+							},
+							"compilerPath": {
+								"type": "string",
+								"description": "编译器路径"
+							},
+							"args": {
+								"type": "array",
+								"description": "编译参数",
+								"items": {
+									"type": "string"
+								},
+								"default": []
+							},
+							"additionalIncludePaths": {
+								"type": "array",
+								"description": "附加包含目录",
+								"items": {
+									"type": "string"
+								},
+								"default": []
+							},
+							"relativeOutputPath": {
+								"type": "string",
+								"description": "输出文件相对源文件的目录，默认为同一目录",
+								"default": ""
+							},
+							"timeoutSec": {
+								"type": "number",
+								"description": "超时时间(s),默认为 1s",
+								"minimum": 0,
+								"default": 1
+							},
+							"memoryLimitMB": {
+								"type": "number",
+								"description": "内存限制(MB)，默认为 512MB",
+								"minimum": 0,
+								"default": 512
+							},
+							"mixStdoutStderr": {
+								"type": "boolean",
+								"description": "把标准错误输出也当作标准输出处理，如果你要使用 Address Sanitizer，启用这个功能。",
+								"default": false
+							},
+							"description": {
+								"type": "string",
+								"description": "描述",
+								"default": ""
+							}
+						}
+					},
+					"default": []
 				}
 			}
 		}

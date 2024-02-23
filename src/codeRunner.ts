@@ -3,7 +3,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { CaseGroup, CaseNode, CaseViewProvider } from './caseView';
 import { spawn } from 'child_process';
-
+import { TestPreset } from './testPreset';
+import { onDidConfigChanged } from './config';
 const ac_icon = vscode.Uri.file(path.join(__dirname, '..', 'media', 'check.svg'));
 const wa_icon = vscode.Uri.file(path.join(__dirname, '..', 'media', 'error.svg'));
 const re_icon = vscode.Uri.file(path.join(__dirname, '..', 'media', 'bug.svg'));
@@ -11,18 +12,14 @@ const tle_icon = vscode.Uri.file(path.join(__dirname, '..', 'media', 'clock.svg'
 const mle_icon = vscode.Uri.file(path.join(__dirname, '..', 'media', 'memory.svg'));
 let file_md5_table = new Map<string, string>();
 
-let config = vscode.workspace.getConfiguration("mirai-vscode");
-
-export function clearCompileCache(){
+export function clearCompileCache() {
 	file_md5_table.clear();
 }
-vscode.workspace.onDidChangeConfiguration((e) => {
-	if (e.affectsConfiguration("mirai-vscode")) {
-		config = vscode.workspace.getConfiguration("mirai-vscode");
-		clearCompileCache();
-	}
-});
-function runSubprocess(file: string, args: string[], timeoutSec: number, memoryLimitMB: number, input: string, token: vscode.CancellationToken)
+
+onDidConfigChanged(() => clearCompileCache());
+
+function runSubprocess(file: string, args: string[], timeoutSec: number, memoryLimitMB: number, input: string,
+	mixStdoutStderr: boolean, token: vscode.CancellationToken)
 	: Promise<{ code: number | null, time: number | null, memory: number | null, message: string, output: string | null }> {
 	return new Promise((resolve) => {
 		let output = "";
@@ -68,7 +65,7 @@ function runSubprocess(file: string, args: string[], timeoutSec: number, memoryL
 		child.stdin.end();
 
 		child.stdout.on('data', (data: string) => output += data);
-		if (config.get<boolean>("mix_stdout_stderr")) {
+		if (mixStdoutStderr) {
 			child.stderr.on('data', (data: string) => output += data);
 		}
 		child.on('error', (error) => {
@@ -84,7 +81,7 @@ function runSubprocess(file: string, args: string[], timeoutSec: number, memoryL
 	});
 }
 
-async function compile(srcFile: string, dstFile: string) {
+async function compile(preset: TestPreset, srcFile: string) {
 	if (file_md5_table.get(srcFile) === getFileMD5(srcFile)) {
 		return Promise.resolve({ code: 0, message: "No change", output: "" });
 	}
@@ -94,15 +91,7 @@ async function compile(srcFile: string, dstFile: string) {
 		cancellable: true
 	}, async (progress, token) => {
 		return new Promise<{ code: number, message: string, output: string }>((resolve) => {
-			const compiler = config.get<string>("compiler_path");
-			const args = config.get<string[]>("compile_args");
-			if (!compiler || !args) {
-				console.log("No compiler configured");
-				resolve({ code: -1, message: "No compiler configured", output: "" });
-				return;
-			}
-			console.log();
-			const child = spawn(compiler, [...args, srcFile, '-o', dstFile],
+			const child = spawn(preset.compilerPath, preset.generateCompileArgs(srcFile),
 				{ windowsHide: true });
 			let output = '';
 
@@ -154,20 +143,9 @@ function compareOutput(output: string, expected: string) {
 	return trimEndSpaceEachLine(output) === trimEndSpaceEachLine(expected);
 }
 
-function prepareForCompile(): { sourceFile: string, executableFile: string } {
-	const sourceFile = getCurrentFile();
-	let opt_relative_path = config.get<string>("output_relative_path");
-	if (!opt_relative_path) opt_relative_path = "";
-	const executableFile = path.join(path.dirname(sourceFile),
-		opt_relative_path,
-		path.basename(sourceFile, "cpp") + "exe")
-	return { sourceFile, executableFile };
-}
-
-async function doSingleTestImpl(testCase: CaseNode, executableFile: string, token: vscode.CancellationToken) {
-	let timeOutSec = config.get<number>("default_timeout");
-	if (!timeOutSec) timeOutSec = 1;
-	let { code, time, memory, message, output } = await runSubprocess(executableFile, [], timeOutSec, 256, testCase.input, token);
+async function doSingleTestImpl(preset: TestPreset, file: string, testCase: CaseNode, token: vscode.CancellationToken) {
+	let { code, time, memory, message, output } =
+		await runSubprocess(preset.getExecutableFile(file), [], preset.timeoutSec, preset.memoryLimitMB, testCase.input, preset.mixStdoutStderr, token);
 	testCase.output = output || "";
 	if (code === 0) {
 		if (compareOutput(testCase.output, testCase.expectedOutput)) {
@@ -193,13 +171,13 @@ async function doSingleTestImpl(testCase: CaseNode, executableFile: string, toke
 
 let outputChannel = vscode.window.createOutputChannel("Mirai-vscode：编译输出");
 
-export async function doSingleTest(testCase: CaseNode) {
-	const { sourceFile, executableFile } = prepareForCompile();
+export async function doSingleTest(preset: TestPreset, testCase: CaseNode) {
+	const sourceFile = getCurrentFile();
 	if (sourceFile == "") {
 		vscode.window.showErrorMessage("未打开文件");
 		return;
 	}
-	const { code, message, output } = await compile(sourceFile, executableFile);
+	const { code, message, output } = await compile(preset, sourceFile);
 	console.log(message);
 	if (code === 0) {
 		const result = await vscode.window.withProgress({
@@ -207,7 +185,7 @@ export async function doSingleTest(testCase: CaseNode) {
 			title: "正在测试...",
 			cancellable: true
 		}, async (progress, token) => {
-			await doSingleTestImpl(testCase, executableFile, token);
+			await doSingleTestImpl(preset, sourceFile, testCase, token);
 			return !token.isCancellationRequested;
 		});
 	}
@@ -222,8 +200,8 @@ export async function doSingleTest(testCase: CaseNode) {
 	}
 }
 
-export async function doTest(testCases: CaseNode[], caseViewProvider: CaseViewProvider, caseView: vscode.TreeView<CaseNode>) {
-	const { sourceFile, executableFile } = prepareForCompile();
+export async function doTest(preset: TestPreset, testCases: CaseNode[], caseViewProvider: CaseViewProvider, caseView: vscode.TreeView<CaseNode>) {
+	const sourceFile = getCurrentFile();
 	if (sourceFile == "") {
 		vscode.window.showErrorMessage("未打开文件");
 		return;
@@ -232,7 +210,7 @@ export async function doTest(testCases: CaseNode[], caseViewProvider: CaseViewPr
 		vscode.window.showErrorMessage("未添加测试用例");
 		return;
 	}
-	const { code, message, output } = await compile(sourceFile, executableFile);
+	const { code, message, output } = await compile(preset, sourceFile);
 	if (code === 0) {
 		const result = await vscode.window.withProgress({
 			location: vscode.ProgressLocation.Notification,
@@ -240,11 +218,11 @@ export async function doTest(testCases: CaseNode[], caseViewProvider: CaseViewPr
 			cancellable: true
 		}, async (progress, token) => {
 			for (let c of testCases) {
-				if (token.isCancellationRequested){
-					c.iconPath=undefined;
+				if (token.isCancellationRequested) {
+					c.iconPath = undefined;
 				}
 				caseView.reveal(c);
-				await doSingleTestImpl(c, executableFile, token);
+				await doSingleTestImpl(preset, sourceFile, c, token);
 				caseViewProvider.refresh(c);
 				progress.report({ increment: 100 / testCases.length });
 			}

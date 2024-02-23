@@ -1,42 +1,48 @@
 import * as vscode from 'vscode';
-import { WebviewViewProvider } from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { CaseViewProvider, CaseNode, CaseGroup } from './caseView'
 import { ProblemsExplorerProvider, ProblemsItem } from './problemsExplorer'
-import { loadConfig, saveConfig } from './config'
+import { loadProblems, saveProblems } from './problemPersistence'
 import { doTest, doSingleTest, clearCompileCache } from './codeRunner'
 import { startListen } from './listener';
-import { start } from 'repl';
-import { Editor } from './editor'
+import { Editor } from './editor';
+import { TestPreset } from './testPreset';
+import { getConfig, onDidConfigChanged, testPresets } from "./config";
 
 let problemsExplorerView: vscode.TreeView<ProblemsItem>;
 let caseView: vscode.TreeView<CaseNode>;
 
+let currentTestPresetLabel: string | undefined;
+let currentTestPreset: TestPreset | undefined;
+
 export function activate(context: vscode.ExtensionContext) {
+	function registerCommand(command: string, callback: (...args: any[]) => any, thisArg?: any): void {
+		context.subscriptions.push(vscode.commands.registerCommand(command, callback, thisArg));
+	}
 	// ProblemsExplorer
 	const problemsExplorerProvider = new ProblemsExplorerProvider();
 	problemsExplorerView = vscode.window.createTreeView('problemsExplorer', { treeDataProvider: problemsExplorerProvider });
 	context.subscriptions.push(vscode.window.registerTreeDataProvider('problemsExplorer', problemsExplorerProvider));
-	context.subscriptions.push(vscode.commands.registerCommand('problemsExplorer.addProblem', () => {
+	registerCommand('problemsExplorer.addProblem', () => {
 		problemsExplorerProvider.onBtnAddProblemClicked();
-	}));
-	vscode.commands.registerCommand('problemsExplorer.addProblemFromFolder', () => { });
-	context.subscriptions.push(vscode.commands.registerCommand('problemsExplorer.renameProblem', (element: ProblemsItem) => {
+	});
+	registerCommand('problemsExplorer.addProblemFromFolder', () => { });
+	registerCommand('problemsExplorer.renameProblem', (element: ProblemsItem) => {
 		problemsExplorerProvider.onBtnRenameProblemClicked(element);
-	}));
-	context.subscriptions.push(vscode.commands.registerCommand('problemsExplorer.deleteProblem', (element: ProblemsItem) => {
+	});
+	registerCommand('problemsExplorer.deleteProblem', (element: ProblemsItem) => {
 		problemsExplorerProvider.onBtnDeleteProblemClicked(element);
-	}));
-	context.subscriptions.push(vscode.commands.registerCommand('problemsExplorer.openProblemUrl', (element: ProblemsItem) => {
+	});
+	registerCommand('problemsExplorer.openProblemUrl', (element: ProblemsItem) => {
 		if (element.url) {
 			vscode.env.openExternal(vscode.Uri.parse(element.url));
 		}
 		else {
 			vscode.window.showErrorMessage("找不到该题目的链接");
 		}
-	}));
-	context.subscriptions.push(vscode.commands.registerCommand('problemsExplorer.copyProblemUrl', (element: ProblemsItem) => {
+	});
+	registerCommand('problemsExplorer.copyProblemUrl', (element: ProblemsItem) => {
 		if (element.url) {
 			vscode.env.clipboard.writeText(element.url);
 			vscode.window.showInformationMessage("已复制");
@@ -44,51 +50,59 @@ export function activate(context: vscode.ExtensionContext) {
 		else {
 			vscode.window.showErrorMessage("找不到该题目的链接");
 		}
-	}));
-	context.subscriptions.push(vscode.commands.registerCommand('problemsExplorer.switchGroupingMethod', () => {
+	});
+	registerCommand('problemsExplorer.switchGroupingMethod', () => {
 		problemsExplorerProvider.onBtnSwitchGroupingMethodClicked();
-	}));
-	context.subscriptions.push(vscode.commands.registerCommand('problemsExplorer.switchProblem', async (element: ProblemsItem) => {
+	});
+	registerCommand('problemsExplorer.switchProblem', async (element: ProblemsItem) => {
 		await saveCurrentCaseContent();
 		caseViewProvider.switchCaseGroup(element.caseGroup!);
 		showCurrentCaseContent();
-	}));
+	});
 
 	// CaseView
 	const caseViewProvider = new CaseViewProvider();
 	caseView = vscode.window.createTreeView('caseView', { treeDataProvider: caseViewProvider });
 	context.subscriptions.push(vscode.window.registerTreeDataProvider('caseView', caseViewProvider));
-	context.subscriptions.push(vscode.commands.registerCommand('caseView.setting', () => {
+	registerCommand('caseView.setting', () => {
 		vscode.commands.executeCommand('workbench.action.openSettings', '@ext:bakabaka9405.mirai-vscode');
-	}));
-	context.subscriptions.push(vscode.commands.registerCommand('caseView.addCase', () => {
+	});
+	registerCommand('caseView.addCase', () => {
 		caseViewProvider.onBtnAddCaseClicked();
-	}));
-	context.subscriptions.push(vscode.commands.registerCommand('caseView.deleteCase', (element: CaseNode) => {
+	});
+	registerCommand('caseView.deleteCase', (element: CaseNode) => {
 		caseViewProvider.onBtnDeleteCaseClicked(element);
-	}));
-	context.subscriptions.push(vscode.commands.registerCommand('caseView.renameCase', (element: CaseNode) => {
+	});
+	registerCommand('caseView.renameCase', (element: CaseNode) => {
 		caseViewProvider.onBtnRenameCaseClicked(element);
-	}));
-	context.subscriptions.push(vscode.commands.registerCommand('caseView.clearCompileCache', () => {
+	});
+	registerCommand('caseView.clearCompileCache', () => {
 		clearCompileCache();
 		vscode.window.showInformationMessage("已清除");
-	}));
+	});
 
-	context.subscriptions.push(vscode.commands.registerCommand('caseView.testAllCase', async () => {
+	registerCommand('caseView.testAllCase', async () => {
 		await vscode.workspace.saveAll(false);
-		await doTest(caseViewProvider.getChildren(), caseViewProvider, caseView);
+		if (!currentTestPreset) {
+			vscode.window.showErrorMessage("未选择编译测试预设");
+			return;
+		}
+		await doTest(currentTestPreset, caseViewProvider.getChildren(), caseViewProvider, caseView);
 		showCurrentCaseContent();
-	}));
+	});
 
-	context.subscriptions.push(vscode.commands.registerCommand('caseView.testSingleCase', async (element: CaseNode) => {
+	registerCommand('caseView.testSingleCase', async (element: CaseNode) => {
 		await vscode.workspace.saveAll(false);
 		caseView.reveal(element);
 		element.iconPath = undefined;
 		caseViewProvider.refresh(element);
-		await doSingleTest(element);
+		if (!currentTestPreset) {
+			vscode.window.showErrorMessage("未选择编译测试预设");
+			return;
+		}
+		await doSingleTest(currentTestPreset, element);
 		caseViewProvider.refresh(element);
-	}));
+	});
 
 	async function saveCurrentCaseContent() {
 		if (inputEditor && outputEditor && expectedOutputEditor && caseViewProvider.current_case) {
@@ -113,11 +127,11 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	}
 
-	context.subscriptions.push(vscode.commands.registerCommand('caseView.switchCase', async (element: CaseNode | undefined) => {
+	registerCommand('caseView.switchCase', async (element: CaseNode | undefined) => {
 		await saveCurrentCaseContent();
 		caseViewProvider.current_case = element;
 		showCurrentCaseContent();
-	}));
+	});
 
 	const inputEditor = new Editor(context);
 	context.subscriptions.push(vscode.window.registerWebviewViewProvider("inputView", inputEditor
@@ -149,11 +163,11 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
-	context.subscriptions.push(vscode.commands.registerCommand('outputView.copyOutput', async () => {
+	registerCommand('outputView.copyOutput', async () => {
 		const content = await outputEditor.getText();
 		await vscode.env.clipboard.writeText(content);
 		vscode.window.showInformationMessage("已复制");
-	}));
+	});
 
 	//expectedOutputView
 	const expectedOutputEditor = new Editor(context);
@@ -171,7 +185,7 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
-	context.subscriptions.push(vscode.commands.registerCommand('expectedOutputView.contrast', async () => {
+	registerCommand('expectedOutputView.contrast', async () => {
 		const os = require('os');
 		let file1 = path.join(os.tmpdir(), 'contrast_lt.txt');
 		let file2 = path.join(os.tmpdir(), 'contrast_rt.txt');
@@ -185,12 +199,59 @@ export function activate(context: vscode.ExtensionContext) {
 		let uri2 = vscode.Uri.file(file2);
 
 		vscode.commands.executeCommand('vscode.diff', uri1, uri2, "输出↔期望输出");
-	}));
+	});
 
-	//load config
-	let config = loadConfig();
-	problemsExplorerProvider.groupingMethod=config.groupingMethod||"None";
-	problemsExplorerProvider.problems = config.problems.map((problem: { label: string; cases: CaseGroup; group?: string, url?: string }) => {
+	// StatusBar
+
+	let statusBarTestPreset = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
+	statusBarTestPreset.text = "编译测试预设";
+	statusBarTestPreset.tooltip = "切换编译测试预设";
+	statusBarTestPreset.command = "mirai-vscode.onBtnToggleTestPresetClicked";
+	statusBarTestPreset.show();
+	context.subscriptions.push(statusBarTestPreset);
+
+	registerCommand('mirai-vscode.onBtnToggleTestPresetClicked', async () => {
+		let items: { label: string, description: string }[] = testPresets.map((preset) => {
+			return {
+				label: preset.label,
+				description: preset.description
+			}
+		});
+		if (items.length == 0) {
+			vscode.window.showErrorMessage("没有预设");
+			return;
+		}
+		let selected = await vscode.window.showQuickPick(items, {
+			placeHolder: items[0].label
+		});
+
+		if (selected) {
+			currentTestPreset = testPresets.find((preset) => preset.label == selected.label);
+			if (!currentTestPreset) {
+				vscode.window.showErrorMessage("未找到预设");
+				statusBarTestPreset.text = "编译测试预设";
+			}
+			else {
+				currentTestPresetLabel = statusBarTestPreset.text = currentTestPreset.label;
+			}
+			clearCompileCache();
+		}
+	});
+
+	onDidConfigChanged(() => {
+		if (currentTestPresetLabel) {
+			currentTestPreset = testPresets.find((preset) => preset.label == currentTestPresetLabel);
+			if (!currentTestPreset) {
+				currentTestPresetLabel = undefined;
+				statusBarTestPreset.text = "编译测试预设";
+			}
+		}
+	})
+
+	//load problems
+	let problemsJson = loadProblems();
+	problemsExplorerProvider.groupingMethod = problemsJson.groupingMethod || "None";
+	problemsExplorerProvider.problems = problemsJson.problems.map((problem: { label: string; cases: CaseGroup; group?: string, url?: string }) => {
 		let p = new ProblemsItem(problem.label, problem.group, problem.url);
 		p.caseGroup!.data = Object.values(problem.cases).map((c) => {
 			return new CaseNode(c.label, vscode.TreeItemCollapsibleState.None, undefined, c.input, "", c.expectedOutput);
@@ -198,10 +259,12 @@ export function activate(context: vscode.ExtensionContext) {
 		return p;
 	});
 	problemsExplorerProvider.refresh();
-	//save config
+
+	//save problems
 	let timer = setInterval(() => {
-		saveConfig(problemsExplorerProvider);
+		saveProblems(problemsExplorerProvider);
 	}, 5000);
+	context.subscriptions.push({ dispose: () => clearInterval(timer) });
 
 	startListen(problemsExplorerProvider);
 }

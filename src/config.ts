@@ -1,48 +1,30 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
-import * as fs from 'fs';
-import { ProblemsExplorerProvider, ProblemsItem, ProblemsGroupingMethod } from './problemsExplorer';
-import { CaseGroup, CaseNode } from './caseView';
+import { TestPreset, checkTestPresetLabelUniqueness } from './testPreset';
+let config: vscode.WorkspaceConfiguration;
+export let testPresets: TestPreset[];
 
-export function saveConfig(provider: ProblemsExplorerProvider) {
-	let problems: ProblemsItem[] = provider.problems;
-	let config = {
-		problems: problems.map((problem) => {
-			return {
-				label: problem.label,
-				group: problem.group,
-				url: problem.url,
-				cases: problem.caseGroup?.data.map((c) => {
-					return {
-						label: c.label,
-						input: c.input,
-						expectedOutput: c.expectedOutput
-					}
-				})
-			}
-		}),
-		groupingMethod: ProblemsGroupingMethod[provider.groupingMethod]
-	}
+let _onDidConfigChanged = new vscode.EventEmitter<void>();
+export const onDidConfigChanged = _onDidConfigChanged.event;
 
-	if (vscode.workspace.workspaceFolders) {
-		const workspaceFolder = vscode.workspace.workspaceFolders[0].uri.fsPath;
-		const configFile = path.join(workspaceFolder, 'mirai_config.json');
-		fs.writeFileSync(configFile, JSON.stringify(config));
+function refreshConfig() {
+	config = vscode.workspace.getConfiguration("mirai-vscode");
+	let obj: any[] = config.get<any[]>("test_presets") || [];
+	testPresets = obj.map((o: any) => TestPreset.fromObject(o));
+	let duplicateLabel = checkTestPresetLabelUniqueness(testPresets);
+	if (duplicateLabel) {
+		vscode.window.showErrorMessage(`检测到重复的预设名: ${duplicateLabel}，将总是使用同名的第一个预设。`);
 	}
 }
 
-export function loadConfig() {
-	if (vscode.workspace.workspaceFolders) {
-		const workspaceFolder = vscode.workspace.workspaceFolders[0].uri.fsPath;
-		const configFile = path.join(workspaceFolder, 'mirai_config.json');
+refreshConfig();
 
-		if (fs.existsSync(configFile)) {
-			let config = JSON.parse(fs.readFileSync(configFile).toString());
-			return config;
-		}
+vscode.workspace.onDidChangeConfiguration((e) => {
+	if (e.affectsConfiguration("mirai-vscode")) {
+		refreshConfig();
+		_onDidConfigChanged.fire();
 	}
+});
 
-	return {
-		problems: []
-	};
+export function getConfig<T>(section: string): T | undefined {
+	return config.get<T>(section);
 }
