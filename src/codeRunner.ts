@@ -74,7 +74,7 @@ function runSubprocess(file: string, args: string[], timeoutSec: number, memoryL
 				code: null,
 				time: null,
 				memory: null,
-				message: `Runtime Error`,
+				message: `Runtime Error: ${error.message}`,
 				output
 			});
 		});
@@ -84,6 +84,9 @@ function runSubprocess(file: string, args: string[], timeoutSec: number, memoryL
 async function compile(preset: TestPreset, srcFile: string) {
 	if (file_md5_table.get(srcFile) === getFileMD5(srcFile)) {
 		return Promise.resolve({ code: 0, message: "No change", output: "" });
+	}
+	if (!fs.existsSync(preset.compilerPath)) {
+		return Promise.resolve({ code: -1, message: `找不到编译器 ${preset.label}。期望路径：${preset.compilerPath}`, output: "" });
 	}
 	const result = await vscode.window.withProgress({
 		location: vscode.ProgressLocation.Notification,
@@ -167,6 +170,7 @@ async function doSingleTestImpl(preset: TestPreset, file: string, testCase: Case
 	else if ((code == null && message == 'Runtime Error') || code !== 0) {
 		testCase.iconPath = { light: re_icon, dark: re_icon };
 	}
+	console.log(message);
 }
 
 let outputChannel = vscode.window.createOutputChannel("Mirai-vscode：编译输出");

@@ -226,7 +226,7 @@ export function activate(context: vscode.ExtensionContext) {
 		});
 
 		if (selected) {
-			currentTestPreset = testPresets.find((preset) => preset.label == selected.label);
+			currentTestPreset = testPresets.find((preset) => preset.label == selected!.label);
 			if (!currentTestPreset) {
 				vscode.window.showErrorMessage("未找到预设");
 				statusBarTestPreset.text = "编译测试预设";
