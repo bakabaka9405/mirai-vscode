@@ -9,12 +9,19 @@ import { startListen } from './listener';
 import { Editor } from './editor';
 import { TestPreset } from './testPreset';
 import { getConfig, onDidConfigChanged, testPresets } from "./config";
+import { generateAllCompileCommandJson } from "./compileCommandsGenerator"
 
 let problemsExplorerView: vscode.TreeView<ProblemsItem>;
 let caseView: vscode.TreeView<CaseNode>;
 
 let currentTestPresetLabel: string | undefined;
 let currentTestPreset: TestPreset | undefined;
+
+let _onDidTestPresetChanged = new vscode.EventEmitter<TestPreset | undefined>();
+export const onDidTestPresetChanged = _onDidTestPresetChanged.event;
+
+let _onCompileCommandsNeedUpdate = new vscode.EventEmitter<void>();
+export const onCompileCommandsNeedUpdate = _onCompileCommandsNeedUpdate.event;
 
 export function activate(context: vscode.ExtensionContext) {
 	function registerCommand(command: string, callback: (...args: any[]) => any, thisArg?: any): void {
@@ -235,6 +242,7 @@ export function activate(context: vscode.ExtensionContext) {
 				currentTestPresetLabel = statusBarTestPreset.text = currentTestPreset.label;
 			}
 			clearCompileCache();
+			_onDidTestPresetChanged.fire(currentTestPreset);
 		}
 	});
 
@@ -244,9 +252,36 @@ export function activate(context: vscode.ExtensionContext) {
 			if (!currentTestPreset) {
 				currentTestPresetLabel = undefined;
 				statusBarTestPreset.text = "编译测试预设";
+				_onDidTestPresetChanged.fire(undefined);
 			}
 		}
-	})
+		_onCompileCommandsNeedUpdate.fire();
+	});
+
+	onDidTestPresetChanged((preset) => {
+		_onCompileCommandsNeedUpdate.fire();
+	});
+
+	onCompileCommandsNeedUpdate(() => {
+		if (currentTestPreset && getConfig<string>("generate_compile_commands")) {
+			const compileCommands = generateAllCompileCommandJson(currentTestPreset, path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, getConfig<string>("scan_base_dir") || ""));
+			fs.writeFileSync(path.join(vscode.workspace.workspaceFolders![0].uri.fsPath,
+				getConfig<string>("compile_commands_path") || "", "compile_commands.json"),
+				compileCommands);
+		}
+	});
+
+	let watcher = vscode.workspace.createFileSystemWatcher("**/*.cpp", false, true, false);
+	console.log("watching");
+	watcher.onDidCreate((e) => {
+		_onCompileCommandsNeedUpdate.fire();
+		console.log(`File created: ${e.path}`);
+	});
+	watcher.onDidDelete((e) => {
+		_onCompileCommandsNeedUpdate.fire();
+		console.log(`File deleted: ${e.path}`);
+	});
+	context.subscriptions.push(watcher);
 
 	//load problems
 	let problemsJson = loadProblems();

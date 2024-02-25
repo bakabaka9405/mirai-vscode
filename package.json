@@ -277,44 +277,20 @@
 			"type": "object",
 			"title": "Mirai-vscode",
 			"properties": {
-				"mirai-vscode.default_timeout": {
-					"type": "number",
-					"description": "默认超时时间(ms)",
-					"default": 1000
-				},
-				"mirai-vscode.compiler_path": {
-					"type": "string",
-					"description": "编译器路径",
-					"default": "g++"
-				},
-				"mirai-vscode.additional_include_path": {
-					"type": "array",
-					"description": "附加包含目录",
-					"items": {
-						"type": "string"
-					},
-					"default": []
-				},
-				"mirai-vscode.output_relative_path": {
-					"type": "string",
-					"description": "输出文件相对源文件的目录",
-					"default": ""
-				},
-				"mirai-vscode.mix_stdout_stderr": {
+				"mirai-vscode.generate_compile_commands": {
 					"type": "boolean",
-					"description": "把标准错误输出也当作标准输出处理，如果你要使用 Address Sanitizer，启用这个功能。",
+					"description": "生成 compile_commands.json 文件",
 					"default": false
 				},
-				"mirai-vscode.compile_args": {
-					"type": "array",
-					"description": "编译参数",
-					"items": {
-						"type": "string"
-					},
-					"default": [
-						"-std=c++20",
-						"-O2"
-					]
+				"mirai-vscode.compile_commands_path": {
+					"type": "string",
+					"description": "compile_commands.json 相对项目根目录的路径",
+					"default": ""
+				},
+				"mirai-vscode.scan_base_dir": {
+					"type": "string",
+					"description": "扫描源文件的基础目录",
+					"default": "${workspaceFolder}"
 				},
 				"mirai-vscode.test_presets": {
 					"type": "array",

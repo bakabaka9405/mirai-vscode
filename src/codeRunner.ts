@@ -81,11 +81,20 @@ function runSubprocess(file: string, args: string[], timeoutSec: number, memoryL
 	});
 }
 
+async function isProgramInPath(program: string) {
+	const child = spawn('where', [program], { windowsHide: true });
+	return new Promise<boolean>((resolve) => {
+		child.on('exit', (code) => {
+			resolve(code === 0);
+		});
+	});
+}
+
 async function compile(preset: TestPreset, srcFile: string) {
 	if (file_md5_table.get(srcFile) === getFileMD5(srcFile)) {
 		return Promise.resolve({ code: 0, message: "No change", output: "" });
 	}
-	if (!fs.existsSync(preset.compilerPath)) {
+	if (!fs.existsSync(preset.compilerPath) && !await isProgramInPath(preset.compilerPath)) {
 		return Promise.resolve({ code: -1, message: `找不到编译器 ${preset.label}。期望路径：${preset.compilerPath}`, output: "" });
 	}
 	const result = await vscode.window.withProgress({
