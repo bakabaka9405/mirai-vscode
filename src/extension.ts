@@ -109,6 +109,7 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 		await doSingleTest(currentTestPreset, element);
 		caseViewProvider.refresh(element);
+		showCurrentCaseContent();
 	});
 
 	async function saveCurrentCaseContent() {
