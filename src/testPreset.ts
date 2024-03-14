@@ -3,7 +3,9 @@ export class TestPreset {
 	constructor(
 		public label: string,
 		public compilerPath: string,
-		public args: string[] = [],
+		public std: string = "",
+		public optimization: string = "",
+		public additionalArgs: string[] = [],
 		public additionalIncludePaths: string[] = [],
 		public relativeOutputPath: string = "",
 		public timeoutSec: number = 1000,
@@ -22,7 +24,9 @@ export class TestPreset {
 		return new TestPreset(
 			obj.name,
 			obj.compilerPath,
-			obj.args,
+			obj.std,
+			obj.optimization,
+			obj.additionalArgs,
 			obj.additionalIncludePaths,
 			obj.relativeOutputPath,
 			obj.timeoutSec,
@@ -32,21 +36,20 @@ export class TestPreset {
 		);
 	}
 
-	public generateCompileArgs(file:string):string[]{
-		let args = this.args.slice();
-		args.push(...this.additionalIncludePaths.map((p)=>`-I${p}`));
+	public generateCompileArgs(file: string): string[] {
+		let args: string[] = [];
+		if (this.std) args.push("-std=" + this.std);
+		if (this.optimization) args.push("-" + this.optimization);
+		args.push(...this.additionalArgs.slice());
+		args.push(...this.additionalIncludePaths.map((p) => `-I${p}`));
 		args.push(file);
 		args.push("-o");
 		args.push(this.getExecutableFile(file));
-		console.log(args);
 		return args;
 	}
 
 	public generateCompileCommand(file: string): string {
-		let args = this.args.join(" ");
-		let includePaths = this.additionalIncludePaths.map((p) => `-I${p}`).join(" ");
-		const executableFile = this.getExecutableFile(file);
-		return `${this.compilerPath} ${file} ${args} ${includePaths} -o ${executableFile}`;
+		return `${this.compilerPath} ${this.generateCompileArgs(file).join(" ")}`;
 	}
 }
 

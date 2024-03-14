@@ -30,7 +30,7 @@ export function generateAllCompileCommandJson(preset: TestPreset, baseDir: strin
 	return JSON.stringify(commands);
 }
 
-export function updateCompileCommands(preset:TestPreset,baseDir:string):void{
-	let compileCommands = generateAllCompileCommandJson(preset,baseDir);
-	fs.writeFileSync(path.join(baseDir,"compile_commands.json"),compileCommands);
+export function updateCompileCommands(preset: TestPreset, baseDir: string): void {
+	let compileCommands = generateAllCompileCommandJson(preset, baseDir);
+	fs.writeFileSync(path.join(baseDir, "compile_commands.json"), compileCommands);
 }

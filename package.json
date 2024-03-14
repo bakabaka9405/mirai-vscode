@@ -7,7 +7,7 @@
 		"name": "bakabaka9405",
 		"email": "bakabaka9405@gmail.com"
 	},
-	"version": "0.0.5",
+	"version": "0.0.6",
 	"engines": {
 		"vscode": "^1.70.0"
 	},
@@ -174,10 +174,6 @@
 				"command": "caseView.switchCase",
 				"title": "切换样例",
 				"group": "navigation"
-			},
-			{
-				"command": "mirai-vscode.onBtnTestPresetClicked",
-				"title": "编译测试预设"
 			}
 		],
 		"menus": {
@@ -306,7 +302,33 @@
 								"type": "string",
 								"description": "编译器路径"
 							},
-							"args": {
+							"std": {
+								"type": "string",
+								"description": "语言标准",
+								"enum": [
+									"c++98",
+									"c++11",
+									"c++14",
+									"c++17",
+									"c++20",
+									"c++23",
+									"c++26"
+								]
+							},
+							"optimization": {
+								"type": "string",
+								"description": "优化级别",
+								"enum": [
+									"O0",
+									"O1",
+									"O2",
+									"O3",
+									"Ofast",
+									"Og",
+									"Os"
+								]
+							},
+							"additionalArgs": {
 								"type": "array",
 								"description": "编译参数",
 								"items": {

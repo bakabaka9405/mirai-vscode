@@ -17,11 +17,24 @@ let caseView: vscode.TreeView<CaseNode>;
 let currentTestPresetLabel: string | undefined;
 let currentTestPreset: TestPreset | undefined;
 
+let overridingStd: string | undefined;
+let overridingOptimizaion: string | undefined;
+
+function packTestPreset(): TestPreset | undefined {
+	if (!currentTestPreset) return undefined;
+	let preset: TestPreset = TestPreset.fromObject(currentTestPreset);
+	if (overridingStd) preset.std = overridingStd;
+	if (overridingOptimizaion) preset.optimization = overridingOptimizaion;
+	return preset;
+}
+
 let _onDidTestPresetChanged = new vscode.EventEmitter<TestPreset | undefined>();
 export const onDidTestPresetChanged = _onDidTestPresetChanged.event;
 
 let _onCompileCommandsNeedUpdate = new vscode.EventEmitter<void>();
 export const onCompileCommandsNeedUpdate = _onCompileCommandsNeedUpdate.event;
+
+
 
 export function activate(context: vscode.ExtensionContext) {
 	function registerCommand(command: string, callback: (...args: any[]) => any, thisArg?: any): void {
@@ -94,7 +107,7 @@ export function activate(context: vscode.ExtensionContext) {
 			vscode.window.showErrorMessage("未选择编译测试预设");
 			return;
 		}
-		await doTest(currentTestPreset, caseViewProvider.getChildren(), caseViewProvider, caseView);
+		await doTest(packTestPreset()!, caseViewProvider.getChildren(), caseViewProvider, caseView);
 		showCurrentCaseContent();
 	});
 
@@ -107,7 +120,7 @@ export function activate(context: vscode.ExtensionContext) {
 			vscode.window.showErrorMessage("未选择编译测试预设");
 			return;
 		}
-		await doSingleTest(currentTestPreset, element);
+		await doSingleTest(packTestPreset()!, element);
 		caseViewProvider.refresh(element);
 		showCurrentCaseContent();
 	});
@@ -261,14 +274,69 @@ export function activate(context: vscode.ExtensionContext) {
 
 	onDidTestPresetChanged((preset) => {
 		_onCompileCommandsNeedUpdate.fire();
+		if (!overridingStd) statusBarOverridingStd.text = preset?.std ? `不改变（${preset.std}）` : "不改变";
+		if (!overridingOptimizaion) statusBarOverridingOptimization.text = preset?.optimization ? `不改变（${preset.optimization}）` : "不改变";
 	});
 
 	onCompileCommandsNeedUpdate(() => {
 		if (currentTestPreset && getConfig<string>("generate_compile_commands")) {
-			const compileCommands = generateAllCompileCommandJson(currentTestPreset, path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, getConfig<string>("scan_base_dir") || ""));
+			const compileCommands = generateAllCompileCommandJson(
+				packTestPreset()!, path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, getConfig<string>("scan_base_dir") || ""));
 			fs.writeFileSync(path.join(vscode.workspace.workspaceFolders![0].uri.fsPath,
 				getConfig<string>("compile_commands_path") || "", "compile_commands.json"),
 				compileCommands);
+		}
+	});
+
+	let statusBarOverridingStd = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
+	statusBarOverridingStd.text = "不改变";
+	statusBarOverridingStd.tooltip = "重载语言标准";
+	statusBarOverridingStd.command = "mirai-vscode.onBtnToggleOverridingStdClicked";
+	statusBarOverridingStd.show();
+	context.subscriptions.push(statusBarOverridingStd);
+
+	registerCommand('mirai-vscode.onBtnToggleOverridingStdClicked', async () => {
+		if (!currentTestPreset) {
+			vscode.window.showErrorMessage("未选择编译预设");
+			return;
+		}
+		let items = [currentTestPreset?.std ? `不改变（${currentTestPreset.std}）` : "不改变", "c++98", "c++11", "c++14", "c++17", "c++20", "c++23", "c++26"];
+		let selected = await vscode.window.showQuickPick(items, {
+			placeHolder: items[0]
+		});
+
+		if (selected) {
+			if (items.findIndex(v => v == selected) == 0) overridingStd = undefined;
+			else overridingStd = selected;
+			statusBarOverridingStd.text = selected;
+			_onCompileCommandsNeedUpdate.fire();
+			clearCompileCache();
+		}
+	});
+
+	let statusBarOverridingOptimization = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
+	statusBarOverridingOptimization.text = "不改变";
+	statusBarOverridingOptimization.tooltip = "重载优化选项";
+	statusBarOverridingOptimization.command = "mirai-vscode.onBtnToggleOverridingOptimizationClicked";
+	statusBarOverridingOptimization.show();
+	context.subscriptions.push(statusBarOverridingOptimization);
+
+	registerCommand('mirai-vscode.onBtnToggleOverridingOptimizationClicked', async () => {
+		if (!currentTestPreset) {
+			vscode.window.showErrorMessage("未选择编译预设");
+			return;
+		}
+		let items = [currentTestPreset?.optimization ? `不改变（${currentTestPreset.optimization}）` : "不改变", "O0", "O1", "O2", "O3", "Ofast", "Og", "Os"];
+		let selected = await vscode.window.showQuickPick(items, {
+			placeHolder: items[0]
+		});
+
+		if (selected) {
+			if (items.findIndex(v => v == selected) == 0) overridingOptimizaion = undefined;
+			else overridingOptimizaion = selected;
+			statusBarOverridingOptimization.text = selected;
+			_onCompileCommandsNeedUpdate.fire();
+			clearCompileCache();
 		}
 	});
 
