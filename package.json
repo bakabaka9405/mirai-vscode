@@ -376,7 +376,12 @@
 					"default": []
 				}
 			}
-		}
+		},
+		"keybindings": [{
+			"command": "caseView.testAllCase",
+			"key": "f10",
+			"when": "editorTextFocus"
+		}]
 	},
 	"scripts": {
 		"vscode:prepublish": "yarn run compile",
