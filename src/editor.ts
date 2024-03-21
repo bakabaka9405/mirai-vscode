@@ -73,4 +73,8 @@ export class Editor implements vscode.WebviewViewProvider {
 			</body>
 		</html>`;
 	}
+
+	public reveal(){
+		this.webviewView?.show(true);
+	}
 }

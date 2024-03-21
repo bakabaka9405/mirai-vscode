@@ -101,7 +101,9 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.window.showInformationMessage("已清除");
 	});
 
+
 	registerCommand('caseView.testAllCase', async () => {
+		inputEditor.reveal();
 		await vscode.workspace.saveAll(false);
 		if (!currentTestPreset) {
 			vscode.window.showErrorMessage("未选择编译测试预设");
@@ -127,12 +129,12 @@ export function activate(context: vscode.ExtensionContext) {
 
 	async function saveCurrentCaseContent() {
 		if (inputEditor && outputEditor && expectedOutputEditor && caseViewProvider.current_case) {
-			const [inputContent, outputContent, expectedOutputContent] = await Promise.all([
-				inputEditor.getText(),
-				outputEditor.getText(),
-				expectedOutputEditor.getText()
-			]);
 			if (caseViewProvider.current_case) {
+				const [inputContent, outputContent, expectedOutputContent] = await Promise.all([
+					inputEditor.getText(),
+					outputEditor.getText(),
+					expectedOutputEditor.getText()
+				]);
 				caseViewProvider.current_case.input = inputContent;
 				caseViewProvider.current_case.output = outputContent;
 				caseViewProvider.current_case.expectedOutput = expectedOutputContent;
@@ -145,6 +147,11 @@ export function activate(context: vscode.ExtensionContext) {
 			inputEditor.setText(caseViewProvider.current_case.input);
 			outputEditor.setText(caseViewProvider.current_case.output);
 			expectedOutputEditor.setText(caseViewProvider.current_case.expectedOutput);
+		}
+		else {
+			inputEditor.setText("");
+			outputEditor.setText("");
+			expectedOutputEditor.setText("");
 		}
 	}
 
