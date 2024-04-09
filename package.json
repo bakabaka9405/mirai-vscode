@@ -147,6 +147,11 @@
 				"icon": "media/clear.svg"
 			},
 			{
+				"command":"caseView.searchCasesInFolder",
+				"title":"从文件夹添加样例",
+				"icon":"media/folder-search.svg"
+			},
+			{
 				"command": "outputView.copyOutput",
 				"title": "复制输出",
 				"icon": "media/copy.svg"
@@ -197,6 +202,11 @@
 					"command": "caseView.addCase",
 					"when": "view==caseView",
 					"group": "navigation"
+				},
+				{
+					"command":"caseView.searchCasesInFolder",
+					"when":"view==caseView",
+					"group":"navigation"
 				},
 				{
 					"command": "caseView.setting",

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-
+import * as path from 'path';
+import * as fs from 'fs';
 export class CaseViewProvider implements vscode.TreeDataProvider<CaseNode> {
 	private _onDidChangeTreeData: vscode.EventEmitter<CaseNode | undefined | void> = new vscode.EventEmitter<CaseNode | undefined | void>();
 	readonly onDidChangeTreeData: vscode.Event<CaseNode | undefined | void> = this._onDidChangeTreeData.event;
@@ -66,6 +67,40 @@ export class CaseViewProvider implements vscode.TreeDataProvider<CaseNode> {
 			element.setLabel(label);
 			this.refresh();
 		}
+	}
+	public async onBtnSearchCasesInFolderClicked() {
+		if (!this.cases) {
+			vscode.window.showErrorMessage("当前未选中试题");
+			return;
+		}
+		let folders = await vscode.window.showOpenDialog({
+			canSelectFiles: false,
+			canSelectFolders: true,
+			canSelectMany: true,
+
+			openLabel: "选择文件夹"
+		});
+		if (folders) {
+			let count = 0;
+			for (let folder of folders) {
+				let files = await vscode.workspace.findFiles(new vscode.RelativePattern(folder, "*.in"));
+				if (files.length > 0) {
+					files.forEach((file) => {
+						const inputPath = file.fsPath;
+						const expectedOutputPath = file.fsPath.replace(/\.in$/, ".ans");
+						if (fs.existsSync(expectedOutputPath)) {
+							const input = fs.readFileSync(inputPath, 'utf-8');
+							const expectedOutput = fs.readFileSync(expectedOutputPath, 'utf-8');
+							this.cases?.data.push(new CaseNode(path.basename(file.fsPath, '.in'), vscode.TreeItemCollapsibleState.None, undefined, input, "", expectedOutput));
+							count += 1;
+						}
+					});
+				}
+			}
+			vscode.window.showInformationMessage(`找到${count}个样例`);
+			this.refresh();
+		}
+
 	}
 }
 

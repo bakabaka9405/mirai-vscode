@@ -90,6 +90,9 @@ export function activate(context: vscode.ExtensionContext) {
 	registerCommand('caseView.addCase', () => {
 		caseViewProvider.onBtnAddCaseClicked();
 	});
+	registerCommand('caseView.searchCasesInFolder', async() => {
+		caseViewProvider.onBtnSearchCasesInFolderClicked();
+	});
 	registerCommand('caseView.deleteCase', (element: CaseNode) => {
 		caseViewProvider.onBtnDeleteCaseClicked(element);
 	});
