@@ -16,7 +16,7 @@ require(['vs/editor/editor.main'], function () {
 		lineNumbersMinChars: 2,
 		lineDecorationsWidth: 1,
 		contextmenu: false,
-		fontFamily: "'Jetbrains Mono Medium','Microsoft YaHei Mono', monospace",
+		fontFamily: "'Jetbrains Mono Medium','Microsoft YaHei Mono',Consolas,'Microsoft YaHei', monospace",
 		quickSuggestions: false
 	});
 	monaco.editor.defineTheme('myTheme', {
@@ -41,7 +41,7 @@ require(['vs/editor/editor.main'], function () {
 				editor.setValue(message.data);
 				break;
 			case 'setReadOnly':
-				console.log("setreadonly");
+				//console.log("setreadonly");
 				editor.updateOptions({ readOnly: message.data || true });
 				break;
 		}

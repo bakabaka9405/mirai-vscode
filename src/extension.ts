@@ -106,8 +106,11 @@ export function activate(context: vscode.ExtensionContext) {
 		inputEditor.reveal();
 		await vscode.workspace.saveAll(false);
 		if (!currentTestPreset) {
-			vscode.window.showErrorMessage("未选择编译测试预设");
-			return;
+			await vscode.commands.executeCommand("mirai-vscode.onBtnToggleTestPresetClicked");
+			if (!currentTestPreset) {
+				vscode.window.showErrorMessage("未选择编译测试预设");
+				return;
+			}
 		}
 		await doTest(packTestPreset()!, caseViewProvider.getChildren(), caseViewProvider, caseView);
 		showCurrentCaseContent();
@@ -119,8 +122,11 @@ export function activate(context: vscode.ExtensionContext) {
 		element.iconPath = undefined;
 		caseViewProvider.refresh(element);
 		if (!currentTestPreset) {
-			vscode.window.showErrorMessage("未选择编译测试预设");
-			return;
+			await vscode.commands.executeCommand("mirai-vscode.onBtnToggleTestPresetClicked");
+			if (!currentTestPreset) {
+				vscode.window.showErrorMessage("未选择编译测试预设");
+				return;
+			}
 		}
 		await doSingleTest(packTestPreset()!, element);
 		caseViewProvider.refresh(element);
