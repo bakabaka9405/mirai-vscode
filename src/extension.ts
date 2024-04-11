@@ -205,6 +205,7 @@ export function activate(context: vscode.ExtensionContext) {
 		await saveCurrentCaseContent();
 		caseViewProvider.current_case = element;
 		showCurrentCaseContent();
+		inputEditor.reveal();
 	});
 
 	const inputEditor = new Editor(context);
