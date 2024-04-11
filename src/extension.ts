@@ -4,7 +4,7 @@ import * as path from 'path';
 import { CaseViewProvider, CaseNode, CaseGroup } from './caseView'
 import { ProblemsExplorerProvider, ProblemsItem } from './problemsExplorer'
 import { loadProblems, saveProblems } from './problemPersistence'
-import { doTest, doSingleTest, clearCompileCache } from './codeRunner'
+import { doTest, doSingleTest, compileAndRun, clearCompileCache } from './codeRunner'
 import { startListen } from './listener';
 import { Editor } from './editor';
 import { TestPreset } from './testPreset';
@@ -90,7 +90,7 @@ export function activate(context: vscode.ExtensionContext) {
 	registerCommand('caseView.addCase', () => {
 		caseViewProvider.onBtnAddCaseClicked();
 	});
-	registerCommand('caseView.searchCasesInFolder', async() => {
+	registerCommand('caseView.searchCasesInFolder', async () => {
 		caseViewProvider.onBtnSearchCasesInFolderClicked();
 	});
 	registerCommand('caseView.deleteCase', (element: CaseNode) => {
@@ -104,6 +104,29 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.window.showInformationMessage("已清除");
 	});
 
+	registerCommand('explorer.compileAndRun', async () => {
+		await vscode.workspace.saveAll(false);
+		if (!currentTestPreset) {
+			await vscode.commands.executeCommand("mirai-vscode.onBtnToggleTestPresetClicked");
+			if (!currentTestPreset) {
+				vscode.window.showErrorMessage("未选择编译测试预设");
+				return;
+			}
+		}
+		compileAndRun(packTestPreset()!);
+	});
+
+	registerCommand('explorer.compileAndRunForceCompile', async () => {
+		await vscode.workspace.saveAll(false);
+		if (!currentTestPreset) {
+			await vscode.commands.executeCommand("mirai-vscode.onBtnToggleTestPresetClicked");
+			if (!currentTestPreset) {
+				vscode.window.showErrorMessage("未选择编译测试预设");
+				return;
+			}
+		}
+		compileAndRun(packTestPreset()!,true);
+	});
 
 	registerCommand('caseView.testAllCase', async () => {
 		inputEditor.reveal();
@@ -116,6 +139,20 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 		}
 		await doTest(packTestPreset()!, caseViewProvider.getChildren(), caseViewProvider, caseView);
+		showCurrentCaseContent();
+	});
+
+	registerCommand('caseView.testAllCaseForceCompile', async () => {
+		inputEditor.reveal();
+		await vscode.workspace.saveAll(false);
+		if (!currentTestPreset) {
+			await vscode.commands.executeCommand("mirai-vscode.onBtnToggleTestPresetClicked");
+			if (!currentTestPreset) {
+				vscode.window.showErrorMessage("未选择编译测试预设");
+				return;
+			}
+		}
+		await doTest(packTestPreset()!, caseViewProvider.getChildren(), caseViewProvider, caseView,true);
 		showCurrentCaseContent();
 	});
 

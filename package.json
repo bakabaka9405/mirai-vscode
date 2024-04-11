@@ -7,7 +7,7 @@
 		"name": "bakabaka9405",
 		"email": "bakabaka9405@gmail.com"
 	},
-	"version": "0.0.7",
+	"version": "0.0.8",
 	"engines": {
 		"vscode": "^1.70.0"
 	},
@@ -132,9 +132,18 @@
 				"icon": "media/edit.svg"
 			},
 			{
+				"command": "explorer.compileAndRun",
+				"title": "编译运行",
+				"icon": "$(run)"
+			},
+			{
 				"command": "caseView.testSingleCase",
 				"title": "运行单个样例",
 				"icon": "$(run)"
+			},
+			{
+				"command":"caseView.testAllCaseForceCompile",
+				"title":"强制重新编译并运行所有样例"
 			},
 			{
 				"command": "caseView.testAllCase",
@@ -147,9 +156,9 @@
 				"icon": "media/clear.svg"
 			},
 			{
-				"command":"caseView.searchCasesInFolder",
-				"title":"从文件夹添加样例",
-				"icon":"media/folder-search.svg"
+				"command": "caseView.searchCasesInFolder",
+				"title": "从文件夹添加样例",
+				"icon": "media/folder-search.svg"
 			},
 			{
 				"command": "outputView.copyOutput",
@@ -204,9 +213,9 @@
 					"group": "navigation"
 				},
 				{
-					"command":"caseView.searchCasesInFolder",
-					"when":"view==caseView",
-					"group":"navigation"
+					"command": "caseView.searchCasesInFolder",
+					"when": "view==caseView",
+					"group": "navigation"
 				},
 				{
 					"command": "caseView.setting",
@@ -276,6 +285,13 @@
 					"when": "view==caseView && viewItem==case",
 					"group": "inline",
 					"order": 1
+				}
+			],
+			"explorer/context": [
+				{
+					"command": "explorer.compileAndRun",
+					"when": "!explorerResourceIsFolder&&resourceExtname==.cpp",
+					"group": "inline"
 				}
 			]
 		},
@@ -387,11 +403,28 @@
 				}
 			}
 		},
-		"keybindings": [{
-			"command": "caseView.testAllCase",
-			"key": "f10",
-			"when": "editorTextFocus"
-		}]
+		"keybindings": [
+			{
+				"command": "caseView.testAllCase",
+				"key": "f10",
+				"when": "editorTextFocus&&resourceExtname==.cpp"
+			},
+			{
+				"command": "explorer.compileAndRun",
+				"key": "f11",
+				"when": "!explorerResourceIsFolder&&resourceExtname==.cpp"
+			},
+			{
+				"command": "caseView.testAllCaseForceCompile",
+				"key": "ctrl+f10",
+				"when": "editorTextFocus&&resourceExtname==.cpp"
+			},
+			{
+				"command": "explorer.compileAndRunForceCompile",
+				"key": "ctrl+f11",
+				"when": "!explorerResourceIsFolder&&resourceExtname==.cpp"
+			}
+		]
 	},
 	"scripts": {
 		"vscode:prepublish": "yarn run compile",

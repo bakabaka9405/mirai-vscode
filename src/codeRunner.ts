@@ -90,8 +90,8 @@ async function isProgramInPath(program: string) {
 	});
 }
 
-async function compile(preset: TestPreset, srcFile: string) {
-	if (file_md5_table.get(srcFile) === getFileMD5(srcFile)) {
+async function compile(preset: TestPreset, srcFile: string, force: boolean = false) {
+	if (file_md5_table.get(srcFile) === getFileMD5(srcFile) && !force) {
 		return Promise.resolve({ code: 0, message: "No change", output: "" });
 	}
 	if (!fs.existsSync(preset.compilerPath) && !await isProgramInPath(preset.compilerPath)) {
@@ -184,13 +184,13 @@ async function doSingleTestImpl(preset: TestPreset, file: string, testCase: Case
 
 let outputChannel = vscode.window.createOutputChannel("Mirai-vscode：编译输出");
 
-export async function doSingleTest(preset: TestPreset, testCase: CaseNode) {
+export async function doSingleTest(preset: TestPreset, testCase: CaseNode, forceCompile: boolean = false) {
 	const sourceFile = getCurrentFile();
 	if (sourceFile == "") {
 		vscode.window.showErrorMessage("未打开文件");
 		return;
 	}
-	const { code, message, output } = await compile(preset, sourceFile);
+	const { code, message, output } = await compile(preset, sourceFile, forceCompile);
 	console.log(message);
 	if (code === 0) {
 		const result = await vscode.window.withProgress({
@@ -213,7 +213,34 @@ export async function doSingleTest(preset: TestPreset, testCase: CaseNode) {
 	}
 }
 
-export async function doTest(preset: TestPreset, testCases: CaseNode[], caseViewProvider: CaseViewProvider, caseView: vscode.TreeView<CaseNode>) {
+let terminal: vscode.Terminal | undefined = undefined;
+
+export async function compileAndRun(preset: TestPreset, forceCompile: boolean = false) {
+	const sourceFile = getCurrentFile();
+	if (sourceFile == "") {
+		vscode.window.showErrorMessage("未打开文件");
+		return;
+	}
+
+	const { code, message, output } = await compile(preset, sourceFile, forceCompile);
+	if (code === 0) {
+		if (!terminal) terminal = vscode.window.createTerminal("mirai-vscode:编译运行");
+		terminal.sendText(preset.getExecutableFile(sourceFile));
+		terminal.show();
+	}
+	else {
+		vscode.window.showErrorMessage(`编译失败：${message}`, "查看详细信息").then((value) => {
+			if (value) {
+				outputChannel.clear();
+				outputChannel.appendLine(output);
+				outputChannel.show();
+			}
+		});
+	}
+}
+
+export async function doTest(preset: TestPreset, testCases: CaseNode[], caseViewProvider: CaseViewProvider,
+	caseView: vscode.TreeView<CaseNode>, forceCompile: boolean = false) {
 	const sourceFile = getCurrentFile();
 	if (sourceFile == "") {
 		vscode.window.showErrorMessage("未打开文件");
@@ -223,7 +250,7 @@ export async function doTest(preset: TestPreset, testCases: CaseNode[], caseView
 		vscode.window.showErrorMessage("未添加测试用例");
 		return;
 	}
-	const { code, message, output } = await compile(preset, sourceFile);
+	const { code, message, output } = await compile(preset, sourceFile, forceCompile);
 	if (code === 0) {
 		const result = await vscode.window.withProgress({
 			location: vscode.ProgressLocation.Notification,
