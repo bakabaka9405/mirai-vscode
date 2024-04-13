@@ -225,7 +225,7 @@ export async function compileAndRun(preset: TestPreset, forceCompile: boolean = 
 	const { code, message, output } = await compile(preset, sourceFile, forceCompile);
 	if (code === 0) {
 		if (!terminal) terminal = vscode.window.createTerminal("mirai-vscode:编译运行");
-		terminal.sendText(preset.getExecutableFile(sourceFile));
+		terminal.sendText(`& "${preset.getExecutableFile(sourceFile)}"`);
 		terminal.show();
 	}
 	else {
