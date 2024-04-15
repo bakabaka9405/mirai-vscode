@@ -407,7 +407,7 @@
 			{
 				"command": "caseView.testAllCase",
 				"key": "f10",
-				"when": "editorTextFocus&&resourceExtname==.cpp"
+				"when": "!explorerResourceIsFolder&&resourceExtname==.cpp"
 			},
 			{
 				"command": "explorer.compileAndRun",
@@ -417,7 +417,7 @@
 			{
 				"command": "caseView.testAllCaseForceCompile",
 				"key": "ctrl+f10",
-				"when": "editorTextFocus&&resourceExtname==.cpp"
+				"when": "!explorerResourceIsFolder&&resourceExtname==.cpp"
 			},
 			{
 				"command": "explorer.compileAndRunForceCompile",
