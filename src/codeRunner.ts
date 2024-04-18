@@ -191,7 +191,9 @@ export async function doSingleTest(preset: TestPreset, testCase: CaseNode, force
 		return;
 	}
 	const { code, message, output } = await compile(preset, sourceFile, forceCompile);
-	console.log(message);
+	outputChannel.clear();
+	outputChannel.appendLine(output);
+	//outputChannel.show();
 	if (code === 0) {
 		const result = await vscode.window.withProgress({
 			location: vscode.ProgressLocation.Notification,
@@ -205,8 +207,6 @@ export async function doSingleTest(preset: TestPreset, testCase: CaseNode, force
 	else {
 		vscode.window.showErrorMessage(`编译失败：${message}`, "查看详细信息").then((value) => {
 			if (value) {
-				outputChannel.clear();
-				outputChannel.appendLine(output);
 				outputChannel.show();
 			}
 		});
@@ -223,6 +223,9 @@ export async function compileAndRun(preset: TestPreset, forceCompile: boolean = 
 	}
 
 	const { code, message, output } = await compile(preset, sourceFile, forceCompile);
+	outputChannel.clear();
+	outputChannel.appendLine(output);
+	//outputChannel.show(false);
 	if (code === 0) {
 		if (!terminal) terminal = vscode.window.createTerminal("mirai-vscode:编译运行");
 		terminal.sendText(`& "${preset.getExecutableFile(sourceFile)}"`);
@@ -231,8 +234,6 @@ export async function compileAndRun(preset: TestPreset, forceCompile: boolean = 
 	else {
 		vscode.window.showErrorMessage(`编译失败：${message}`, "查看详细信息").then((value) => {
 			if (value) {
-				outputChannel.clear();
-				outputChannel.appendLine(output);
 				outputChannel.show();
 			}
 		});
@@ -251,6 +252,9 @@ export async function doTest(preset: TestPreset, testCases: CaseNode[], caseView
 		return;
 	}
 	const { code, message, output } = await compile(preset, sourceFile, forceCompile);
+	outputChannel.clear();
+	outputChannel.appendLine(output);
+	//outputChannel.show(false);
 	if (code === 0) {
 		const result = await vscode.window.withProgress({
 			location: vscode.ProgressLocation.Notification,
@@ -274,8 +278,6 @@ export async function doTest(preset: TestPreset, testCases: CaseNode[], caseView
 	else {
 		vscode.window.showErrorMessage(`编译失败：${message}`, "查看详细信息").then((value) => {
 			if (value) {
-				outputChannel.clear();
-				outputChannel.appendLine(output);
 				outputChannel.show();
 			}
 		});

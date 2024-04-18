@@ -5,8 +5,24 @@
 	"tasks": [
 		{
 			"type": "npm",
-			"script": "watch",
-			"problemMatcher": "$tsc-watch",
+			"script": "esbuild-watch",
+			"problemMatcher": {
+				"owner": "typescript",
+				"fileLocation": [
+					"relative",
+					"${workspaceFolder}"
+				],
+				"pattern": {
+					"regexp": "\\[watch\\] build finished, watching for changes...",
+					"file": 1,
+					"location": 2,
+					"message": 3
+				},
+				"background": {
+					"beginsPattern": "yarn",
+					"endsPattern": "\\[watch\\] build finished, watching for changes..."
+				}
+			},
 			"isBackground": true,
 			"presentation": {
 				"reveal": "never"
