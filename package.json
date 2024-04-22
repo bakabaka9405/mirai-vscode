@@ -119,12 +119,12 @@
 			{
 				"command": "caseView.addCase",
 				"title": "添加样例",
-				"icon": "$(add)"
+				"icon": "media/add.svg"
 			},
 			{
 				"command": "caseView.deleteCase",
 				"title": "删除样例",
-				"icon": "$(trash)"
+				"icon": "media/delete.svg"
 			},
 			{
 				"command": "caseView.renameCase",
@@ -134,12 +134,22 @@
 			{
 				"command": "explorer.compileAndRun",
 				"title": "编译运行",
-				"icon": "$(run)"
+				"icon": "media/play.svg"
+			},
+			{
+				"command": "startDebugging",
+				"title": "开始调试",
+				"icon": "media/debug.svg"
 			},
 			{
 				"command": "caseView.testSingleCase",
 				"title": "运行单个样例",
-				"icon": "$(run)"
+				"icon": "media/play.svg"
+			},
+			{
+				"command": "caseView.debugCase",
+				"title": "使用该样例进行调试",
+				"icon": "media/debug.svg"
 			},
 			{
 				"command": "caseView.testAllCaseForceCompile",
@@ -148,7 +158,7 @@
 			{
 				"command": "caseView.testAllCase",
 				"title": "运行所有样例",
-				"icon": "$(run-all)"
+				"icon": "media/play-all.svg"
 			},
 			{
 				"command": "caseView.clearCompileCache",
@@ -168,12 +178,12 @@
 			{
 				"command": "caseView.setting",
 				"title": "配置",
-				"icon": "$(gear)"
+				"icon": "media/gear.svg"
 			},
 			{
 				"command": "caseView.stopRunning",
 				"title": "停止运行",
-				"icon": "$(primitive-square)"
+				"icon": "media/stop.svg"
 			},
 			{
 				"command": "problemsExplorer.switchProblem",
@@ -273,6 +283,11 @@
 					"when": "view==caseView && viewItem==case",
 					"group": "inline",
 					"order": 3
+				},
+				{
+					"command": "caseView.debugCase",
+					"when": "view==caseView && viewItem==case",
+					"group": "inline"
 				},
 				{
 					"command": "caseView.deleteCase",

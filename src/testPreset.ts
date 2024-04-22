@@ -14,6 +14,11 @@ export class TestPreset {
 		public description: string = ""
 	) { }
 
+
+	public getOutputPath(file: string): string {
+		return path.join(path.dirname(file), this.relativeOutputPath);
+	}
+
 	public getExecutableFile(file: string): string {
 		return path.join(path.dirname(file),
 			this.relativeOutputPath,
@@ -26,8 +31,8 @@ export class TestPreset {
 			obj.compilerPath,
 			obj.std,
 			obj.optimization,
-			obj.additionalArgs,
-			obj.additionalIncludePaths,
+			obj.additionalArgs.slice(),
+			obj.additionalIncludePaths.slice(),
 			obj.relativeOutputPath,
 			obj.timeoutSec,
 			obj.memoryLimitMB,

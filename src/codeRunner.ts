@@ -283,3 +283,33 @@ export async function doTest(preset: TestPreset, testCases: CaseNode[], caseView
 		});
 	}
 }
+
+export async function doDebug(preset: TestPreset) {
+	const sourceFile = getCurrentFile();
+	if (sourceFile == "") {
+		vscode.window.showErrorMessage("未打开文件");
+		return;
+	}
+	const { code, message, output } = await compile(preset, sourceFile);
+	outputChannel.clear();
+	outputChannel.appendLine(output);
+	//outputChannel.show(false);
+	if (code === 0) {
+		const folder = vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders[0] : undefined;
+		await vscode.debug.startDebugging(folder, {
+			type: "lldb",
+			name: "Debug",
+			request: "launch",
+			program: preset.getExecutableFile(sourceFile),
+			args: [],
+			cwd: "${workspaceFolder}",
+		})
+	}
+	else {
+		vscode.window.showErrorMessage(`编译失败：${message}`, "查看详细信息").then((value) => {
+			if (value) {
+				outputChannel.show();
+			}
+		});
+	}
+}

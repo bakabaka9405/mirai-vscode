@@ -4,7 +4,7 @@ import * as path from 'path';
 import { CaseViewProvider, CaseNode, CaseGroup } from './caseView'
 import { ProblemsExplorerProvider, ProblemsItem } from './problemsExplorer'
 import { loadProblems, saveProblems } from './problemPersistence'
-import { doTest, doSingleTest, compileAndRun, clearCompileCache } from './codeRunner'
+import { doTest, doSingleTest, compileAndRun,doDebug, clearCompileCache } from './codeRunner'
 import { startListen } from './listener';
 import { Editor } from './editor';
 import { TestPreset } from './testPreset';
@@ -20,11 +20,15 @@ let currentTestPreset: TestPreset | undefined;
 let overridingStd: string | undefined;
 let overridingOptimizaion: string | undefined;
 
-function packTestPreset(): TestPreset | undefined {
+function packTestPreset(isDebugging:boolean=false): TestPreset | undefined {
 	if (!currentTestPreset) return undefined;
 	let preset: TestPreset = TestPreset.fromObject(currentTestPreset);
 	if (overridingStd) preset.std = overridingStd;
 	if (overridingOptimizaion) preset.optimization = overridingOptimizaion;
+	if (isDebugging) {
+		preset.additionalArgs.push("-gdwarf-4");
+		preset.optimization = "O0";
+	}
 	return preset;
 }
 
@@ -33,8 +37,6 @@ export const onDidTestPresetChanged = _onDidTestPresetChanged.event;
 
 let _onCompileCommandsNeedUpdate = new vscode.EventEmitter<void>();
 export const onCompileCommandsNeedUpdate = _onCompileCommandsNeedUpdate.event;
-
-
 
 export function activate(context: vscode.ExtensionContext) {
 	function registerCommand(command: string, callback: (...args: any[]) => any, thisArg?: any): void {
@@ -171,6 +173,18 @@ export function activate(context: vscode.ExtensionContext) {
 		await doSingleTest(packTestPreset()!, element);
 		caseViewProvider.refresh(element);
 		showCurrentCaseContent();
+	});
+
+	registerCommand('caseView.debugCase', async (element: CaseNode) => {
+		await vscode.workspace.saveAll(false);
+		if (!currentTestPreset) {
+			await vscode.commands.executeCommand("mirai-vscode.onBtnToggleTestPresetClicked");
+			if (!currentTestPreset) {
+				vscode.window.showErrorMessage("未选择编译测试预设");
+				return;
+			}
+		}
+		await doDebug(packTestPreset(true)!);
 	});
 
 	async function saveCurrentCaseContent() {
