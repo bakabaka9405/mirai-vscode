@@ -174,8 +174,7 @@ export function activate(context: vscode.ExtensionContext) {
 		caseViewProvider.refresh(element);
 		showCurrentCaseContent();
 	});
-
-	registerCommand('caseView.debugCase', async (element: CaseNode) => {
+	registerCommand('startDebugging', async () => {
 		await vscode.workspace.saveAll(false);
 		if (!currentTestPreset) {
 			await vscode.commands.executeCommand("mirai-vscode.onBtnToggleTestPresetClicked");
@@ -185,6 +184,17 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 		}
 		await doDebug(packTestPreset(true)!);
+	});
+	registerCommand('caseView.debugCase', async (element: CaseNode) => {
+		await vscode.workspace.saveAll(false);
+		if (!currentTestPreset) {
+			await vscode.commands.executeCommand("mirai-vscode.onBtnToggleTestPresetClicked");
+			if (!currentTestPreset) {
+				vscode.window.showErrorMessage("未选择编译测试预设");
+				return;
+			}
+		}
+		await doDebug(packTestPreset(true)!,element);
 	});
 
 	async function saveCurrentCaseContent() {

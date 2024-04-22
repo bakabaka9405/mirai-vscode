@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 import { CaseGroup, CaseNode, CaseViewProvider } from './caseView';
 import { spawn } from 'child_process';
 import { TestPreset } from './testPreset';
@@ -11,21 +12,30 @@ const re_icon = vscode.Uri.file(path.join(__dirname, '..', 'media', 'bug.svg'));
 const tle_icon = vscode.Uri.file(path.join(__dirname, '..', 'media', 'clock.svg'));
 const mle_icon = vscode.Uri.file(path.join(__dirname, '..', 'media', 'memory.svg'));
 let file_md5_table = new Map<string, string>();
+let _onStopRunning = new vscode.EventEmitter<void>();
+const onStopRunning = _onStopRunning.event;
 
 export function clearCompileCache() {
 	file_md5_table.clear();
 }
 
-onDidConfigChanged(() => clearCompileCache());
+onDidConfigChanged(clearCompileCache);
+
+export function stopRunning() {
+	_onStopRunning.fire();
+}
+
+function sleep(ms: number) {
+	return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 function runSubprocess(file: string, args: string[], timeoutSec: number, memoryLimitMB: number, input: string,
 	mixStdoutStderr: boolean, token: vscode.CancellationToken)
 	: Promise<{ code: number | null, time: number | null, memory: number | null, message: string, output: string | null }> {
 	return new Promise((resolve) => {
 		let output = "";
-		const startTime = process.hrtime.bigint();
+		let startTime: bigint;
 		const child = spawn(file, args, { windowsHide: true });
-
 		let maxMemoryUsage = 0;
 		const timeoutId = setTimeout(() => {
 			child.kill();
@@ -37,6 +47,19 @@ function runSubprocess(file: string, args: string[], timeoutSec: number, memoryL
 				output
 			});
 		}, timeoutSec * 1000);
+		child.on('spawn', () => { startTime = process.hrtime.bigint() });
+		//listen onStopRunning
+		const stop_listener = onStopRunning(() => {
+			child.kill();
+			stop_listener.dispose();
+			resolve({
+				code: null,
+				time: null,
+				memory: null,
+				message: 'Cancelled',
+				output
+			});
+		});
 
 		//listen cancellationToken
 		token.onCancellationRequested(() => {
@@ -61,9 +84,11 @@ function runSubprocess(file: string, args: string[], timeoutSec: number, memoryL
 			});
 		});
 
-		child.stdin.write(input);
-		child.stdin.end();
-
+		if (input !== "") {
+			child.stdin.write(input);
+			child.stdin.end();
+			startTime = process.hrtime.bigint();
+		}
 		child.stdout.on('data', (data: string) => output += data);
 		if (mixStdoutStderr) {
 			child.stderr.on('data', (data: string) => output += data);
@@ -91,7 +116,8 @@ async function isProgramInPath(program: string) {
 }
 
 async function compile(preset: TestPreset, srcFile: string, force: boolean = false) {
-	if (file_md5_table.get(srcFile) === getFileMD5(srcFile) && !force) {
+	const md5 = getFileMD5(srcFile) + getObjectMD5(preset);
+	if (file_md5_table.get(srcFile) === md5 && !force) {
 		return Promise.resolve({ code: 0, message: "No change", output: "" });
 	}
 	if (!fs.existsSync(preset.compilerPath) && !await isProgramInPath(preset.compilerPath)) {
@@ -116,7 +142,7 @@ async function compile(preset: TestPreset, srcFile: string, force: boolean = fal
 			});
 			child.on('exit', (code) => {
 				if (code === 0) {
-					file_md5_table.set(srcFile, getFileMD5(srcFile));
+					file_md5_table.set(srcFile, md5);
 					resolve({ code, message: `Process exited with code ${code}`, output });
 				}
 				else {
@@ -147,6 +173,13 @@ function getFileMD5(file: string): string {
 	return hash.digest('hex');
 }
 
+function getObjectMD5(obj: any): string {
+	const crypto = require('crypto');
+	const hash = crypto.createHash('md5');
+	hash.update(JSON.stringify(obj));
+	return hash.digest('hex');
+}
+
 function trimEndSpaceEachLine(input: string): string {
 	return input.split('\n').map((line) => line.trimEnd()).join('\n').trimEnd();
 }
@@ -159,6 +192,7 @@ async function doSingleTestImpl(preset: TestPreset, file: string, testCase: Case
 	let { code, time, memory, message, output } =
 		await runSubprocess(preset.getExecutableFile(file), [], preset.timeoutSec, preset.memoryLimitMB, testCase.input, preset.mixStdoutStderr, token);
 	testCase.output = output || "";
+	console.log('time:', time);
 	if (code === 0) {
 		if (compareOutput(testCase.output, testCase.expectedOutput)) {
 			testCase.iconPath = { light: ac_icon, dark: ac_icon };
@@ -194,6 +228,7 @@ export async function doSingleTest(preset: TestPreset, testCase: CaseNode, force
 	outputChannel.clear();
 	outputChannel.appendLine(output);
 	//outputChannel.show();
+	if (message !== "No change") await sleep(500);
 	if (code === 0) {
 		const result = await vscode.window.withProgress({
 			location: vscode.ProgressLocation.Notification,
@@ -261,6 +296,8 @@ export async function doTest(preset: TestPreset, testCases: CaseNode[], caseView
 			title: "正在测试...",
 			cancellable: true
 		}, async (progress, token) => {
+			//await preheat(preset.getExecutableFile(sourceFile), []);
+			if (message !== "No change") await sleep(500);
 			for (let c of testCases) {
 				if (token.isCancellationRequested) {
 					c.iconPath = undefined;
@@ -284,7 +321,7 @@ export async function doTest(preset: TestPreset, testCases: CaseNode[], caseView
 	}
 }
 
-export async function doDebug(preset: TestPreset) {
+export async function doDebug(preset: TestPreset, testCase?: CaseNode) {
 	const sourceFile = getCurrentFile();
 	if (sourceFile == "") {
 		vscode.window.showErrorMessage("未打开文件");
@@ -293,9 +330,18 @@ export async function doDebug(preset: TestPreset) {
 	const { code, message, output } = await compile(preset, sourceFile);
 	outputChannel.clear();
 	outputChannel.appendLine(output);
-	//outputChannel.show(false);
+	let tmpfile: string | undefined;
+	if (testCase) {
+		tmpfile = path.join(os.tmpdir(), "mirai-vscode-debug.tmp");
+		fs.writeFileSync(tmpfile, testCase.input);
+	}
 	if (code === 0) {
 		const folder = vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders[0] : undefined;
+		const onStartDebug = vscode.debug.onDidStartDebugSession((session) => { });
+		const onTerminateDebug = vscode.debug.onDidTerminateDebugSession((session) => {
+			onStartDebug.dispose();
+			onTerminateDebug.dispose();
+		});
 		await vscode.debug.startDebugging(folder, {
 			type: "lldb",
 			name: "Debug",
@@ -303,7 +349,8 @@ export async function doDebug(preset: TestPreset) {
 			program: preset.getExecutableFile(sourceFile),
 			args: [],
 			cwd: "${workspaceFolder}",
-		})
+			stdio: [testCase ? tmpfile : null, null, null]
+		});
 	}
 	else {
 		vscode.window.showErrorMessage(`编译失败：${message}`, "查看详细信息").then((value) => {

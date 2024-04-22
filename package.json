@@ -7,7 +7,7 @@
 		"name": "bakabaka9405",
 		"email": "bakabaka9405@gmail.com"
 	},
-	"version": "0.0.8",
+	"version": "0.0.9",
 	"engines": {
 		"vscode": "^1.70.0"
 	},
@@ -244,6 +244,11 @@
 				},
 				{
 					"command": "caseView.stopRunning",
+					"when": "view==caseView",
+					"group": "navigation"
+				},
+				{
+					"command": "startDebugging",
 					"when": "view==caseView",
 					"group": "navigation"
 				},
