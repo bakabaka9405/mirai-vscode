@@ -329,10 +329,15 @@
 					"description": "compile_commands.json 相对项目根目录的路径",
 					"default": ""
 				},
-				"mirai-vscode.scan_base_dir": {
+				"mirai-vscode.src_base_dir": {
 					"type": "string",
-					"description": "扫描源文件的基础目录",
-					"default": "${workspaceFolder}"
+					"description": "源文件的基目录相对项目根目录的路径",
+					"default": "/"
+				},
+				"mirai-vscode.build_base_dir": {
+					"type": "string",
+					"description": "编译输出的基目录相对项目根目录的路径",
+					"default": "/build"
 				},
 				"mirai-vscode.test_presets": {
 					"type": "array",
@@ -389,11 +394,6 @@
 									"type": "string"
 								},
 								"default": []
-							},
-							"relativeOutputPath": {
-								"type": "string",
-								"description": "输出文件相对源文件的目录，默认为同一目录",
-								"default": ""
 							},
 							"timeoutSec": {
 								"type": "number",

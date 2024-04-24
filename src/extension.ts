@@ -359,7 +359,8 @@ export function activate(context: vscode.ExtensionContext) {
 	onCompileCommandsNeedUpdate(() => {
 		if (currentTestPreset && getConfig<string>("generate_compile_commands")) {
 			const compileCommands = generateAllCompileCommandJson(
-				packTestPreset()!, path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, getConfig<string>("scan_base_dir") || ""));
+				packTestPreset()!, path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, getConfig<string>("src_base_dir") || ""),
+				path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, getConfig<string>("build_base_dir") || ""));
 			fs.writeFileSync(path.join(vscode.workspace.workspaceFolders![0].uri.fsPath,
 				getConfig<string>("compile_commands_path") || "", "compile_commands.json"),
 				compileCommands);
@@ -419,7 +420,7 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 	let watcher = vscode.workspace.createFileSystemWatcher("**/*.cpp", false, true, false);
-	console.log("watching");
+	//console.log("watching");
 	watcher.onDidCreate((e) => {
 		_onCompileCommandsNeedUpdate.fire();
 		console.log(`File created: ${e.path}`);

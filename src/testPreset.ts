@@ -1,4 +1,5 @@
 import path from "path";
+import { getConfig } from "./config";
 export class TestPreset {
 	constructor(
 		public label: string,
@@ -7,22 +8,15 @@ export class TestPreset {
 		public optimization: string = "",
 		public additionalArgs: string[] = [],
 		public additionalIncludePaths: string[] = [],
-		public relativeOutputPath: string = "",
-		public timeoutSec: number = 1000,
+		public timeoutSec: number = 1,
 		public memoryLimitMB: number = 512,
 		public mixStdoutStderr: boolean = false,
 		public description: string = ""
 	) { }
 
 
-	public getOutputPath(file: string): string {
-		return path.join(path.dirname(file), this.relativeOutputPath);
-	}
-
-	public getExecutableFile(file: string): string {
-		return path.join(path.dirname(file),
-			this.relativeOutputPath,
-			path.basename(file, "cpp") + "exe");
+	public getExecutableFile(file: string, outputPath: string): string {
+		return path.join(outputPath, path.basename(file, "cpp") + "exe");
 	}
 
 	public static fromObject(obj: any): TestPreset {
@@ -33,7 +27,6 @@ export class TestPreset {
 			obj.optimization,
 			obj.additionalArgs.slice(),
 			obj.additionalIncludePaths.slice(),
-			obj.relativeOutputPath,
 			obj.timeoutSec,
 			obj.memoryLimitMB,
 			obj.mixStdoutStderr,
@@ -41,20 +34,20 @@ export class TestPreset {
 		);
 	}
 
-	public generateCompileArgs(file: string): string[] {
+	public generateCompileArgs(file: string, outputPath:string): string[] {
 		let args: string[] = [];
 		if (this.std) args.push("-std=" + this.std);
 		if (this.optimization) args.push("-" + this.optimization);
 		args.push(...this.additionalArgs.slice());
-		args.push(...this.additionalIncludePaths.map((p) => `-I${p}`));
-		args.push(file);
+		args.push(...this.additionalIncludePaths.map((p) => `-I"${p}"`));
+		args.push(`"${file}"`);
 		args.push("-o");
-		args.push(this.getExecutableFile(file));
+		args.push(`"${this.getExecutableFile(file,outputPath)}"`);
 		return args;
 	}
 
-	public generateCompileCommand(file: string): string {
-		return `${this.compilerPath} ${this.generateCompileArgs(file).join(" ")}`;
+	public generateCompileCommand(file: string, outputPath: string): string {
+		return `${this.compilerPath} ${this.generateCompileArgs(file, outputPath).join(" ")}`;
 	}
 }
 
