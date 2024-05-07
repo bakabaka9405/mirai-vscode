@@ -4,7 +4,7 @@ import * as path from 'path';
 import { CaseViewProvider, CaseNode, CaseGroup } from './caseView'
 import { ProblemsExplorerProvider, ProblemsItem } from './problemsExplorer'
 import { loadProblems, saveProblems } from './problemPersistence'
-import { doTest, doSingleTest, compileAndRun,doDebug, clearCompileCache } from './codeRunner'
+import { doTest, doSingleTest, compileAndRun, doDebug, clearCompileCache } from './codeRunner'
 import { startListen } from './listener';
 import { Editor } from './editor';
 import { TestPreset } from './testPreset';
@@ -20,7 +20,7 @@ let currentTestPreset: TestPreset | undefined;
 let overridingStd: string | undefined;
 let overridingOptimizaion: string | undefined;
 
-function packTestPreset(isDebugging:boolean=false): TestPreset | undefined {
+function packTestPreset(isDebugging: boolean = false): TestPreset | undefined {
 	if (!currentTestPreset) return undefined;
 	let preset: TestPreset = TestPreset.fromObject(currentTestPreset);
 	if (overridingStd) preset.std = overridingStd;
@@ -72,6 +72,19 @@ export function activate(context: vscode.ExtensionContext) {
 		else {
 			vscode.window.showErrorMessage("找不到该题目的链接");
 		}
+	});
+	registerCommand('problemsExplorer.openProblemCode', (element: ProblemsItem) => {
+		if (!vscode.workspace.workspaceFolders) {
+			vscode.window.showErrorMessage("未打开工作区");
+			return;
+		}
+		let file = vscode.workspace.workspaceFolders[0].uri.fsPath;
+		file = path.join(file, getConfig<string>("src_base_dir") || "", element.group || "", element.label.replace(/[\/:*?"<>|]/g, "") + ".cpp");
+		fs.mkdirSync(path.dirname(file), { recursive: true });
+		if (!fs.existsSync(file)) {
+			fs.writeFileSync(file, "");
+		}
+		vscode.window.showTextDocument(vscode.Uri.file(file));
 	});
 	registerCommand('problemsExplorer.switchGroupingMethod', () => {
 		problemsExplorerProvider.onBtnSwitchGroupingMethodClicked();
@@ -127,7 +140,7 @@ export function activate(context: vscode.ExtensionContext) {
 				return;
 			}
 		}
-		compileAndRun(packTestPreset()!,true);
+		compileAndRun(packTestPreset()!, true);
 	});
 
 	registerCommand('caseView.testAllCase', async () => {
@@ -154,7 +167,7 @@ export function activate(context: vscode.ExtensionContext) {
 				return;
 			}
 		}
-		await doTest(packTestPreset()!, caseViewProvider.getChildren(), caseViewProvider, caseView,true);
+		await doTest(packTestPreset()!, caseViewProvider.getChildren(), caseViewProvider, caseView, true);
 		showCurrentCaseContent();
 	});
 
@@ -194,7 +207,7 @@ export function activate(context: vscode.ExtensionContext) {
 				return;
 			}
 		}
-		await doDebug(packTestPreset(true)!,element);
+		await doDebug(packTestPreset(true)!, element);
 	});
 
 	async function saveCurrentCaseContent() {

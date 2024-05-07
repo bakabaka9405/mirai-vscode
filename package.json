@@ -88,6 +88,11 @@
 				"icon": "media/edit.svg"
 			},
 			{
+				"command": "problemsExplorer.openProblemCode",
+				"title": "打开试题代码",
+				"icon": "media/edit-file.svg"
+			},
+			{
 				"command": "problemsExplorer.addProblem",
 				"title": "添加试题",
 				"icon": "media/add.svg"
@@ -276,6 +281,11 @@
 				},
 				{
 					"command": "problemsExplorer.openProblemUrl",
+					"when": "view==problemsExplorer && viewItem==problem",
+					"group": "inline"
+				},
+				{
+					"command": "problemsExplorer.openProblemCode",
 					"when": "view==problemsExplorer && viewItem==problem",
 					"group": "inline"
 				},
