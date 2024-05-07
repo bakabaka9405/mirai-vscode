@@ -352,6 +352,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	onDidTestPresetChanged((preset) => {
 		_onCompileCommandsNeedUpdate.fire();
+		vscode.commands.executeCommand('clangd.restart');
 		if (!overridingStd) statusBarOverridingStd.text = preset?.std ? `不改变（${preset.std}）` : "不改变";
 		if (!overridingOptimizaion) statusBarOverridingOptimization.text = preset?.optimization ? `不改变（${preset.optimization}）` : "不改变";
 	});
@@ -390,6 +391,7 @@ export function activate(context: vscode.ExtensionContext) {
 			statusBarOverridingStd.text = selected;
 			_onCompileCommandsNeedUpdate.fire();
 			clearCompileCache();
+			vscode.commands.executeCommand('clangd.restart');
 		}
 	});
 

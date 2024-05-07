@@ -15,8 +15,14 @@ export class TestPreset {
 	) { }
 
 
-	public getExecutableFile(file: string, outputPath: string): string {
-		return path.join(outputPath, path.basename(file, "cpp") + "exe");
+	public getExecutableFile(file: string, basePath: string, outputPath: string): string {
+		//console.log(file, basePath, outputPath)
+		let ext = path.extname(file);
+		let relativePath = path.relative(basePath, file);
+		//console.log(relativePath)
+		let res = path.join(outputPath, path.dirname(relativePath), path.basename(relativePath, ext) + ".exe");
+		//console.log(res);
+		return path.join(outputPath,path.dirname(relativePath), path.basename(relativePath, ext) + ".exe");
 	}
 
 	public static fromObject(obj: any): TestPreset {
@@ -34,20 +40,20 @@ export class TestPreset {
 		);
 	}
 
-	public generateCompileArgs(file: string, outputPath:string): string[] {
+	public generateCompileArgs(file: string, basePath: string, outputPath: string): string[] {
 		let args: string[] = [];
 		if (this.std) args.push("-std=" + this.std);
 		if (this.optimization) args.push("-" + this.optimization);
 		args.push(...this.additionalArgs.slice());
-		args.push(...this.additionalIncludePaths.map((p) => `-I"${p}"`));
-		args.push(`"${file}"`);
+		args.push(...this.additionalIncludePaths.map((p) => `-I${p}`));
+		args.push(`${file}`);
 		args.push("-o");
-		args.push(`"${this.getExecutableFile(file,outputPath)}"`);
+		args.push(`${this.getExecutableFile(file, basePath, outputPath)}`);
 		return args;
 	}
 
-	public generateCompileCommand(file: string, outputPath: string): string {
-		return `${this.compilerPath} ${this.generateCompileArgs(file, outputPath).join(" ")}`;
+	public generateCompileCommand(file: string, basePath: string, outputPath: string): string {
+		return `${this.compilerPath} ${this.generateCompileArgs(file, basePath, outputPath).join(" ")}`;
 	}
 }
 

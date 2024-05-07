@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { TestPreset, checkTestPresetLabelUniqueness } from './testPreset';
+import { getAbsolutePath } from './util';
 let config: vscode.WorkspaceConfiguration;
 export let testPresets: TestPreset[];
 
@@ -10,6 +11,9 @@ function refreshConfig() {
 	config = vscode.workspace.getConfiguration("mirai-vscode");
 	let obj: any[] = config.get<any[]>("test_presets") || [];
 	testPresets = obj.map((o: any) => TestPreset.fromObject(o));
+	testPresets.forEach((p) => {
+		p.additionalIncludePaths = p.additionalIncludePaths.map((p) => getAbsolutePath(p));
+	});
 	let duplicateLabel = checkTestPresetLabelUniqueness(testPresets);
 	if (duplicateLabel) {
 		vscode.window.showErrorMessage(`检测到重复的预设名: ${duplicateLabel}，将总是使用同名的第一个预设。`);
@@ -27,4 +31,8 @@ vscode.workspace.onDidChangeConfiguration((e) => {
 
 export function getConfig<T>(section: string): T | undefined {
 	return config.get<T>(section);
+}
+
+export function getWorkspacePath(): string | undefined {
+	return vscode.workspace.workspaceFolders?.[0].uri.fsPath;
 }

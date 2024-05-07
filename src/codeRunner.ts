@@ -115,7 +115,7 @@ async function isProgramInPath(program: string) {
 	});
 }
 
-async function compile(preset: TestPreset, srcFile: string, outputPath: string, force: boolean = false) {
+async function compile(preset: TestPreset, srcFile: string, basePath: string, outputPath: string, force: boolean = false) {
 	const md5 = getFileMD5(srcFile) + getObjectMD5(preset);
 	if (file_md5_table.get(srcFile) === md5 && !force) {
 		return Promise.resolve({ code: 0, message: "No change", output: "" });
@@ -129,7 +129,9 @@ async function compile(preset: TestPreset, srcFile: string, outputPath: string, 
 		cancellable: true
 	}, async (progress, token) => {
 		return new Promise<{ code: number, message: string, output: string }>((resolve) => {
-			const child = spawn(preset.compilerPath, preset.generateCompileArgs(srcFile, outputPath),
+			console.log(preset.generateCompileCommand(srcFile, basePath, outputPath));
+			fs.mkdirSync(path.dirname(preset.getExecutableFile(srcFile, basePath, outputPath)), { recursive: true });
+			const child = spawn(preset.compilerPath, preset.generateCompileArgs(srcFile, basePath, outputPath),
 				{ windowsHide: true });
 			let output = '';
 
@@ -168,16 +170,17 @@ function getCurrentFile(): string {
 function tryGetTestFiles(): string[] | undefined[] {
 	if (!vscode.workspace.workspaceFolders) {
 		vscode.window.showErrorMessage("未打开工作区");
-		return [undefined, undefined];
+		return [undefined, undefined, undefined];
 	}
 	let outputPath = vscode.workspace.workspaceFolders[0].uri.fsPath;
 	const sourceFile = getCurrentFile();
 	if (sourceFile == "") {
 		vscode.window.showErrorMessage("未打开文件");
-		return [undefined, undefined];
+		return [undefined, undefined, undefined];
 	}
+	let basePath = path.join(outputPath, getConfig<string>("src_base_dir") || "");
 	outputPath = path.join(outputPath, getConfig<string>("build_base_dir") || "");
-	return [sourceFile, outputPath];
+	return [sourceFile, basePath, outputPath];
 }
 
 function getFileMD5(file: string): string {
@@ -203,9 +206,9 @@ function compareOutput(output: string, expected: string) {
 	return trimEndSpaceEachLine(output) === trimEndSpaceEachLine(expected);
 }
 
-async function doSingleTestImpl(preset: TestPreset, file: string, outputPath: string, testCase: CaseNode, token: vscode.CancellationToken) {
+async function doSingleTestImpl(preset: TestPreset, file: string, basePath: string, outputPath: string, testCase: CaseNode, token: vscode.CancellationToken) {
 	let { code, time, memory, message, output } =
-		await runSubprocess(preset.getExecutableFile(file, outputPath), [], preset.timeoutSec, preset.memoryLimitMB, testCase.input, preset.mixStdoutStderr, token);
+		await runSubprocess(preset.getExecutableFile(file, basePath, outputPath), [], preset.timeoutSec, preset.memoryLimitMB, testCase.input, preset.mixStdoutStderr, token);
 	testCase.output = output || "";
 	console.log('time:', time);
 	if (code === 0) {
@@ -234,9 +237,9 @@ async function doSingleTestImpl(preset: TestPreset, file: string, outputPath: st
 let outputChannel = vscode.window.createOutputChannel("Mirai-vscode：编译输出");
 
 export async function doSingleTest(preset: TestPreset, testCase: CaseNode, forceCompile: boolean = false) {
-	const [sourceFile, outputPath] = tryGetTestFiles();
-	if (!sourceFile || !outputPath) return;
-	const { code, message, output } = await compile(preset, sourceFile, outputPath, forceCompile);
+	const [sourceFile, basePath, outputPath] = tryGetTestFiles();
+	if (!sourceFile || !basePath || !outputPath) return;
+	const { code, message, output } = await compile(preset, sourceFile, basePath, outputPath, forceCompile);
 	outputChannel.clear();
 	outputChannel.appendLine(output);
 	//outputChannel.show();
@@ -247,7 +250,7 @@ export async function doSingleTest(preset: TestPreset, testCase: CaseNode, force
 			title: "正在测试...",
 			cancellable: true
 		}, async (progress, token) => {
-			await doSingleTestImpl(preset, sourceFile, outputPath, testCase, token);
+			await doSingleTestImpl(preset, sourceFile, basePath, outputPath, testCase, token);
 			return !token.isCancellationRequested;
 		});
 	}
@@ -263,15 +266,15 @@ export async function doSingleTest(preset: TestPreset, testCase: CaseNode, force
 let terminal: vscode.Terminal | undefined = undefined;
 
 export async function compileAndRun(preset: TestPreset, forceCompile: boolean = false) {
-	const [sourceFile, outputPath] = tryGetTestFiles();
-	if (!sourceFile || !outputPath) return;
-	const { code, message, output } = await compile(preset, sourceFile, outputPath, forceCompile);
+	const [sourceFile, basePath, outputPath] = tryGetTestFiles();
+	if (!sourceFile || !basePath || !outputPath) return;
+	const { code, message, output } = await compile(preset, sourceFile, basePath, outputPath, forceCompile);
 	outputChannel.clear();
 	outputChannel.appendLine(output);
 	//outputChannel.show(false);
 	if (code === 0) {
 		if (!terminal) terminal = vscode.window.createTerminal("mirai-vscode:编译运行");
-		terminal.sendText(`& "${preset.getExecutableFile(sourceFile, outputPath)}"`);
+		terminal.sendText(`& "${preset.getExecutableFile(sourceFile, basePath, outputPath)}"`);
 		terminal.show();
 	}
 	else {
@@ -285,9 +288,9 @@ export async function compileAndRun(preset: TestPreset, forceCompile: boolean = 
 
 export async function doTest(preset: TestPreset, testCases: CaseNode[], caseViewProvider: CaseViewProvider,
 	caseView: vscode.TreeView<CaseNode>, forceCompile: boolean = false) {
-	const [sourceFile, outputPath] = tryGetTestFiles();
-	if (!sourceFile || !outputPath) return;
-	const { code, message, output } = await compile(preset, sourceFile, outputPath, forceCompile);
+	const [sourceFile, basePath, outputPath] = tryGetTestFiles();
+	if (!sourceFile || !basePath || !outputPath) return;
+	const { code, message, output } = await compile(preset, sourceFile, basePath, outputPath, forceCompile);
 	outputChannel.clear();
 	outputChannel.appendLine(output);
 	//outputChannel.show(false);
@@ -304,7 +307,7 @@ export async function doTest(preset: TestPreset, testCases: CaseNode[], caseView
 					c.iconPath = undefined;
 				}
 				caseView.reveal(c);
-				await doSingleTestImpl(preset, sourceFile, outputPath, c, token);
+				await doSingleTestImpl(preset, sourceFile, basePath, outputPath, c, token);
 				caseViewProvider.refresh(c);
 				progress.report({ increment: 100 / testCases.length });
 			}
@@ -323,9 +326,9 @@ export async function doTest(preset: TestPreset, testCases: CaseNode[], caseView
 }
 
 export async function doDebug(preset: TestPreset, testCase?: CaseNode) {
-	const [sourceFile, outputPath] = tryGetTestFiles();
-	if (!sourceFile || !outputPath) return;
-	const { code, message, output } = await compile(preset, sourceFile, outputPath);
+	const [sourceFile, basePath, outputPath] = tryGetTestFiles();
+	if (!sourceFile || !basePath || !outputPath) return;
+	const { code, message, output } = await compile(preset, sourceFile, basePath, outputPath);
 	outputChannel.clear();
 	outputChannel.appendLine(output);
 	let tmpfile: string | undefined;
@@ -344,7 +347,7 @@ export async function doDebug(preset: TestPreset, testCase?: CaseNode) {
 			type: "lldb",
 			name: "Debug",
 			request: "launch",
-			program: preset.getExecutableFile(sourceFile,outputPath),
+			program: preset.getExecutableFile(sourceFile, basePath, outputPath),
 			args: [],
 			cwd: "${workspaceFolder}",
 			stdio: [testCase ? tmpfile : null, null, null]
