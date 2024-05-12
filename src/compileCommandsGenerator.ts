@@ -3,8 +3,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { TestPreset } from './testPreset';
 
-function generateSingleCompileCommandJson(preset: TestPreset, file: string, outputPath: string): { directory: string, command: string, file: string } {
-	let command = preset.generateCompileCommand(file, outputPath);
+function generateSingleCompileCommandJson(preset: TestPreset, file: string, basePath: string, outputPath: string): { directory: string, command: string, file: string } {
+	let command = preset.generateCompileCommand(file, basePath, outputPath);
 	return {
 		directory: path.dirname(file),
 		command: command,
@@ -26,7 +26,7 @@ export function generateAllCompileCommandJson(preset: TestPreset, baseDir: strin
 		});
 	}
 	walkDir(baseDir);
-	let commands = files.map((file) => generateSingleCompileCommandJson(preset, file, baseOutputDir));
+	let commands = files.map((file) => generateSingleCompileCommandJson(preset, file, baseDir, baseOutputDir));
 	return JSON.stringify(commands);
 }
 
