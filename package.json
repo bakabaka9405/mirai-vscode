@@ -437,22 +437,22 @@
 			{
 				"command": "caseView.testAllCase",
 				"key": "f10",
-				"when": "!explorerResourceIsFolder&&resourceExtname==.cpp"
+				"when": "resourceExtname==.cpp"
 			},
 			{
 				"command": "explorer.compileAndRun",
 				"key": "f11",
-				"when": "!explorerResourceIsFolder&&resourceExtname==.cpp"
+				"when": "resourceExtname==.cpp"
 			},
 			{
 				"command": "caseView.testAllCaseForceCompile",
 				"key": "ctrl+f10",
-				"when": "!explorerResourceIsFolder&&resourceExtname==.cpp"
+				"when": "resourceExtname==.cpp"
 			},
 			{
 				"command": "explorer.compileAndRunForceCompile",
 				"key": "ctrl+f11",
-				"when": "!explorerResourceIsFolder&&resourceExtname==.cpp"
+				"when": "resourceExtname==.cpp"
 			}
 		]
 	},
