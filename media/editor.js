@@ -1,7 +1,7 @@
 const vscode = acquireVsCodeApi();
 require.config({
 	paths: {
-		'vs': 'https://unpkg.com/monaco-editor/min/vs'
+		'vs': MonacoBaseUri
 	}
 });
 

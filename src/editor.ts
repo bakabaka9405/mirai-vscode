@@ -58,23 +58,26 @@ export class Editor implements vscode.WebviewViewProvider {
 
 
 	private getHtmlForWebview(webview: vscode.Webview) {
+		const loaderUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'monaco', 'loader.js'));
 		const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'editor.js'));
+		const MonacoBaseUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'monaco'));
 		const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'editor.css'));
 		return `
 		<!DOCTYPE html>
 		<html lang="en">
 			<head>
-				<script src="https://unpkg.com/monaco-editor/min/vs/loader.js"></script>
+				<script src="${loaderUri}"></script>
 				<link href="${styleUri}" rel="stylesheet">
 			</head>
 			<body onload="notifyLoad()">
 				<div id="editor"></div>
+				<script>const MonacoBaseUri = "${MonacoBaseUri}";</script>
 				<script src="${scriptUri}"></script>
 			</body>
 		</html>`;
 	}
 
-	public reveal(){
+	public reveal() {
 		this.webviewView?.show(true);
 	}
 }
