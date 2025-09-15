@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import { CaseGroup, CaseNode, CaseViewProvider } from './caseView';
+import { CaseList, CaseNode, CaseViewProvider } from './caseView';
 import { spawn } from 'child_process';
 import { TestPreset } from './testPreset';
 import { onDidConfigChanged, getConfig } from './config';

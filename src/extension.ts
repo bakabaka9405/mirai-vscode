@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { CaseViewProvider, CaseNode, CaseGroup } from './caseView'
+import { CaseViewProvider, CaseNode, CaseList } from './caseView'
 import { ProblemsExplorerProvider, ProblemsItem } from './problemsExplorer'
 import { loadProblems, saveProblems } from './problemPersistence'
 import { doTest, doSingleTest, compileAndRun, doDebug, clearCompileCache } from './codeRunner'
@@ -46,12 +46,15 @@ export function activate(context: vscode.ExtensionContext) {
 	const problemsExplorerProvider = new ProblemsExplorerProvider();
 	problemsExplorerView = vscode.window.createTreeView('problemsExplorer', { treeDataProvider: problemsExplorerProvider });
 	context.subscriptions.push(vscode.window.registerTreeDataProvider('problemsExplorer', problemsExplorerProvider));
-	registerCommand('problemsExplorer.addProblem', () => {
-		problemsExplorerProvider.onBtnAddProblemClicked();
+	registerCommand('problemsExplorer.addProblem', (element?: ProblemsItem) => {
+		problemsExplorerProvider.onBtnAddProblemClicked(element || problemsExplorerProvider.problemsRoot);
+	});
+	registerCommand('problemsExplorer.addFolder', (element?: ProblemsItem) => {
+		problemsExplorerProvider.onBtnAddFolderClicked(element || problemsExplorerProvider.problemsRoot);
 	});
 	registerCommand('problemsExplorer.addProblemFromFolder', () => { });
-	registerCommand('problemsExplorer.renameProblem', (element: ProblemsItem) => {
-		problemsExplorerProvider.onBtnRenameProblemClicked(element);
+	registerCommand('problemsExplorer.renameProblemOrFolder', (element: ProblemsItem) => {
+		problemsExplorerProvider.onBtnRenameProblemOrFolderClicked(element);
 	});
 	registerCommand('problemsExplorer.deleteProblem', (element: ProblemsItem) => {
 		problemsExplorerProvider.onBtnDeleteProblemClicked(element);
@@ -79,19 +82,16 @@ export function activate(context: vscode.ExtensionContext) {
 			return;
 		}
 		let file = vscode.workspace.workspaceFolders[0].uri.fsPath;
-		file = path.join(file, getConfig<string>("src_base_dir") || "", element.group || "", element.label.replace(/[\/:*?"<>|]/g, "") + ".cpp");
+		file = path.join(file, getConfig<string>("src_base_dir") || "", element.GetPath() + ".cpp");
 		fs.mkdirSync(path.dirname(file), { recursive: true });
 		if (!fs.existsSync(file)) {
 			fs.writeFileSync(file, "");
 		}
 		vscode.window.showTextDocument(vscode.Uri.file(file));
 	});
-	registerCommand('problemsExplorer.switchGroupingMethod', () => {
-		problemsExplorerProvider.onBtnSwitchGroupingMethodClicked();
-	});
 	registerCommand('problemsExplorer.switchProblem', async (element: ProblemsItem) => {
 		await saveCurrentCaseContent();
-		caseViewProvider.switchCaseGroup(element.caseGroup!);
+		caseViewProvider.switchCaseGroup(element.cases!);
 		showCurrentCaseContent();
 	});
 
@@ -448,14 +448,8 @@ export function activate(context: vscode.ExtensionContext) {
 
 	//load problems
 	let problemsJson = loadProblems();
-	problemsExplorerProvider.groupingMethod = problemsJson.groupingMethod || "None";
-	problemsExplorerProvider.problems = problemsJson.problems.map((problem: { label: string; cases: CaseGroup; group?: string, url?: string }) => {
-		let p = new ProblemsItem(problem.label, problem.group, problem.url);
-		p.caseGroup!.data = Object.values(problem.cases).map((c) => {
-			return new CaseNode(c.label, vscode.TreeItemCollapsibleState.None, undefined, c.input, "", c.expectedOutput);
-		});
-		return p;
-	});
+	problemsExplorerProvider.problemsRoot.fromJSON(problemsJson.problems);
+
 	problemsExplorerProvider.refresh();
 
 	//save problems

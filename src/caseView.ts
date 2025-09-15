@@ -4,7 +4,7 @@ import * as fs from 'fs';
 export class CaseViewProvider implements vscode.TreeDataProvider<CaseNode> {
 	private _onDidChangeTreeData: vscode.EventEmitter<CaseNode | undefined | void> = new vscode.EventEmitter<CaseNode | undefined | void>();
 	readonly onDidChangeTreeData: vscode.Event<CaseNode | undefined | void> = this._onDidChangeTreeData.event;
-	private cases: CaseGroup | undefined = undefined;
+	private cases: CaseList | undefined = undefined;
 	public get current_case(): CaseNode | undefined {
 		return this.cases?.current_case;
 	}
@@ -33,7 +33,7 @@ export class CaseViewProvider implements vscode.TreeDataProvider<CaseNode> {
 		this._onDidChangeTreeData.fire(element);
 	}
 
-	public switchCaseGroup(element: CaseGroup) {
+	public switchCaseGroup(element: CaseList) {
 		this.cases = element;
 		this.refresh();
 	}
@@ -106,7 +106,7 @@ export class CaseViewProvider implements vscode.TreeDataProvider<CaseNode> {
 	}
 }
 
-export class CaseGroup {
+export class CaseList {
 	public data: CaseNode[] = []
 	public current_case: CaseNode | undefined = undefined;
 	public push(node: CaseNode) {
@@ -117,6 +117,17 @@ export class CaseGroup {
 	}
 	public get length(): number {
 		return this.data.length;
+	}
+	public toJSON() {
+		return this.data.map(c => c.toJSON());
+	}
+
+	public fromJSON(json: any) {
+		this.data = json.map((c: any) => {
+			let caseNode = new CaseNode("", vscode.TreeItemCollapsibleState.None);
+			caseNode.fromJSON(c);
+			return caseNode;
+		});
 	}
 }
 
@@ -145,4 +156,19 @@ export class CaseNode extends vscode.TreeItem {
 
 	contextValue = "case";
 
+	toJSON() {
+		return {
+			label: this.label,
+			input: this.input,
+			output: this.output,
+			expectedOutput: this.expectedOutput
+		}
+	}
+
+	fromJSON(json: any) {
+		this.label = json.label;
+		this.input = json.input;
+		this.output = json.output;
+		this.expectedOutput = json.expectedOutput;
+	}
 }

@@ -83,7 +83,7 @@
 		],
 		"commands": [
 			{
-				"command": "problemsExplorer.renameProblem",
+				"command": "problemsExplorer.renameProblemOrFolder",
 				"title": "重命名",
 				"icon": "media/edit.svg"
 			},
@@ -103,9 +103,9 @@
 				"icon": "media/folder-search.svg"
 			},
 			{
-				"command": "problemsExplorer.switchGroupingMethod",
-				"title": "切换分组方式",
-				"icon": "media/tree-list.svg"
+				"command": "problemsExplorer.addFolder",
+				"title": "添加文件夹",
+				"icon": "media/folder-add.svg"
 			},
 			{
 				"command": "problemsExplorer.deleteProblem",
@@ -208,17 +208,17 @@
 		"menus": {
 			"view/title": [
 				{
+					"command": "problemsExplorer.addFolder",
+					"when": "view==problemsExplorer",
+					"group": "navigation"
+				},
+				{
 					"command": "problemsExplorer.addProblem",
 					"when": "view==problemsExplorer",
 					"group": "navigation"
 				},
 				{
 					"command": "problemsExplorer.addProblemFromFolder",
-					"when": "view==problemsExplorer",
-					"group": "navigation"
-				},
-				{
-					"command": "problemsExplorer.switchGroupingMethod",
 					"when": "view==problemsExplorer",
 					"group": "navigation"
 				},
@@ -270,13 +270,23 @@
 			],
 			"view/item/context": [
 				{
-					"command": "problemsExplorer.renameProblem",
-					"when": "view==problemsExplorer && (viewItem==problem||viewItem==problemsGroup)",
+					"command": "problemsExplorer.addProblem",
+					"when": "view==problemsExplorer && viewItem==folder",
+					"group": "inline"
+				},
+				{
+					"command": "problemsExplorer.addFolder",
+					"when": "view==problemsExplorer && viewItem==folder",
+					"group": "inline"
+				},
+				{
+					"command": "problemsExplorer.renameProblemOrFolder",
+					"when": "view==problemsExplorer && (viewItem==problem||viewItem==folder)",
 					"group": "inline"
 				},
 				{
 					"command": "problemsExplorer.deleteProblem",
-					"when": "view==problemsExplorer && (viewItem==problem||viewItem==problemsGroup)",
+					"when": "view==problemsExplorer && (viewItem==problem||viewItem==folder)",
 					"group": "inline"
 				},
 				{

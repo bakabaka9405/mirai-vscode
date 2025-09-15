@@ -1,26 +1,11 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { ProblemsExplorerProvider, ProblemsItem, ProblemsGroupingMethod } from './problemsExplorer';
+import { ProblemsExplorerProvider, ProblemsItem } from './problemsExplorer';
 
 export function saveProblems(provider: ProblemsExplorerProvider) {
-	let problems: ProblemsItem[] = provider.problems;
 	let config = {
-		problems: problems.map((problem) => {
-			return {
-				label: problem.label,
-				group: problem.group,
-				url: problem.url,
-				cases: problem.caseGroup?.data.map((c) => {
-					return {
-						label: c.label,
-						input: c.input,
-						expectedOutput: c.expectedOutput
-					}
-				})
-			}
-		}),
-		groupingMethod: ProblemsGroupingMethod[provider.groupingMethod]
+		problems: provider.problemsRoot,
 	};
 
 	if (vscode.workspace.workspaceFolders) {

@@ -1,5 +1,5 @@
 import { ProblemsExplorerProvider, ProblemsItem } from "./problemsExplorer";
-import { CaseGroup, CaseNode } from "./caseView";
+import { CaseList, CaseNode } from "./caseView";
 import * as vscode from 'vscode';
 export function startListen(problemsExplorerProvider: ProblemsExplorerProvider) {
 	const app = require('express')();
@@ -17,12 +17,12 @@ export function startListen(problemsExplorerProvider: ProblemsExplorerProvider) 
 		//console.log('Full body:');
 		//console.log(JSON.stringify(data, null, 4));
 		let cnt = 0;
-		let p = new ProblemsItem(data.name, data.group, data.url);
-		p.caseGroup!.data = data.tests.map((c: any) => {
+		let p = new ProblemsItem(data.name, undefined, data.url);
+		p.cases!.data = data.tests.map((c: any) => {
 			return new CaseNode("Case " + (++cnt), vscode.TreeItemCollapsibleState.None, undefined, c.input, "", c.output);
 		});
 
-		problemsExplorerProvider.problems.push(p);
+		problemsExplorerProvider.problemsRoot.getFolderOrCreate(data.group).push(p);
 		problemsExplorerProvider.refresh();
 		res.sendStatus(200);
 	});

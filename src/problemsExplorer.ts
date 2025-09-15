@@ -1,18 +1,10 @@
 import * as vscode from 'vscode'
-import { CaseGroup } from './caseView'
-
-export enum ProblemsGroupingMethod {
-	None = `None`,
-	Group = 'Group',
-}
+import { CaseList } from './caseView'
 
 export class ProblemsExplorerProvider implements vscode.TreeDataProvider<ProblemsItem> {
 	private _onDidChangeTreeData: vscode.EventEmitter<ProblemsItem | undefined | void> = new vscode.EventEmitter<ProblemsItem | undefined | void>();
 	readonly onDidChangeTreeData: vscode.Event<ProblemsItem | undefined | void> = this._onDidChangeTreeData.event;
-	public problems: ProblemsItem[] = [];
-	private groupingCache: ProblemsItem[] = [];
-	private problemsChanged: boolean = false;
-	public groupingMethod: ProblemsGroupingMethod = ProblemsGroupingMethod.None;
+	public problemsRoot: ProblemsItem = new ProblemsItem("", undefined, undefined, true, []);
 	getTreeItem(element: ProblemsItem): vscode.TreeItem | Thenable<vscode.TreeItem> {
 		return element;
 	}
@@ -20,88 +12,63 @@ export class ProblemsExplorerProvider implements vscode.TreeDataProvider<Problem
 		if (element) {
 			return element.getChildren();
 		}
-		if (this.groupingMethod == ProblemsGroupingMethod.None) {
-			return this.problems;
-		}
-		else {
-			if (this.problemsChanged) {
-				let groups: Map<string, ProblemsItem[]> = new Map();
-				for (let problem of this.problems) {
-					if (!groups.has(problem.group || "其他")) {
-						groups.set(problem.group || "其他", []);
-					}
-					groups.get(problem.group || "其他")?.push(problem);
-				}
-				this.groupingCache = [];
-				groups.forEach((value, key) => {
-					this.groupingCache.push(new ProblemsItem(key, undefined, undefined, value));
-				});
-				this.problemsChanged = false;
-			}
-			return this.groupingCache;
-		}
+		return this.problemsRoot.children || [];
 	}
 	getParent?(element: ProblemsItem): vscode.ProviderResult<ProblemsItem> {
-		return undefined;
+		return element.parent;
 	}
 
 
-	public async onBtnRenameProblemClicked(element: ProblemsItem) {
+	public async onBtnRenameProblemOrFolderClicked(element: ProblemsItem) {
 		const newName = await vscode.window.showInputBox({
 			placeHolder: "New name",
 			value: element.label
 		});
 		if (newName) {
 			element.setLabel(newName);
+			element.parent?.sort();
 			this.refresh();
 		}
 	}
 
 	public refresh() {
-		this.problemsChanged = true;
 		this._onDidChangeTreeData?.fire();
 	}
 
-	public async onBtnAddProblemClicked(label?: string) {
+	public async onBtnAddProblemClicked(element: ProblemsItem, label?: string) {
+		if (!element.folder) return;
+		if (!element.children) element.children = [];
 		if (!label) {
 			label = await vscode.window.showInputBox({
 				placeHolder: "Problem name",
-				value: "Problem " + (this.problems.length + 1)
+				value: "Problem " + (element.children.length + 1)
 			});
 		}
 		if (!label) return;
-		this.problems.push(new ProblemsItem(label));
+		element.push(new ProblemsItem(label, element));
+		this.refresh();
+	}
+
+	public async onBtnAddFolderClicked(element: ProblemsItem) {
+		if (!element.folder) return;
+		if (!element.children) element.children = [];
+		const folderName = await vscode.window.showInputBox({
+			placeHolder: "Folder name",
+			value: "New Folder"
+		});
+		if (!folderName) return;
+		element.getFolderOrCreate(folderName);
 		this.refresh();
 	}
 
 	public onBtnDeleteProblemClicked(element: ProblemsItem) {
-		if (element.children) {
-			for (let child of element.children) {
-				let index = this.problems.indexOf(child);
-				if (index >= 0) {
-					this.problems.splice(index, 1);
-				}
-			}
-			this.refresh();
-		}
-		else {
-			let index = this.problems.indexOf(element);
+		if (element.parent && element.parent.children) {
+			let index = element.parent.children.indexOf(element);
 			if (index >= 0) {
-				this.problems.splice(index, 1);
+				element.parent.children.splice(index, 1);
 				this.refresh();
 			}
-			else console.log("Problem not found")
 		}
-	}
-
-	public onBtnSwitchGroupingMethodClicked() {
-		if (this.groupingMethod == ProblemsGroupingMethod.None) {
-			this.groupingMethod = ProblemsGroupingMethod.Group;
-		}
-		else {
-			this.groupingMethod = ProblemsGroupingMethod.None;
-		}
-		this.refresh();
 	}
 }
 
@@ -109,38 +76,102 @@ export class ProblemsExplorerProvider implements vscode.TreeDataProvider<Problem
 export class ProblemsItem extends vscode.TreeItem {
 	constructor(
 		public label: string,
-		public group?: string,
+		public parent?: ProblemsItem,
 		public url?: string,
-		public children?: ProblemsItem[]
+		public folder: boolean = false,
+		public children?: ProblemsItem[],
+		public collapsibleState: vscode.TreeItemCollapsibleState = folder ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.None
 	) {
-		super(label, vscode.TreeItemCollapsibleState.None);
-		if (!children) {
+		super(label, collapsibleState);
+		if (!folder) {
 			this.command = {
 				command: 'problemsExplorer.switchProblem',
 				title: '切换试题',
 				arguments: [this]
 			};
-			this.caseGroup = new CaseGroup();
+			this.cases = new CaseList();
 			this.contextValue = "problem";
 		}
 		else {
 			this.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
-			this.contextValue = "problemsGroup";
+			this.contextValue = "folder";
 		}
 	}
 
-	public caseGroup?: CaseGroup;
+	public cases?: CaseList;
+
+	GetPath(): string {
+		if (!this.parent) return "";
+		console.log('label=', this.parent.GetPath() + "/" + this.label.replace(/[\/:*?"<>|]/g, ""))
+		return this.parent.GetPath() + "/" + this.label.replace(/[\/:*?"<>|]/g, "");
+	}
 
 	setLabel(newLabel: string) {
 		this.label = newLabel;
-		if (this.children) {
-			for (let child of this.children) {
-				child.group = newLabel;
-			}
-		}
 	}
 
 	getChildren(): ProblemsItem[] {
 		return this.children || [];
 	}
+
+	toJSON(): any {
+		return {
+			label: this.label,
+			url: this.url,
+			folder: this.folder,
+			collapsed: this.collapsibleState === vscode.TreeItemCollapsibleState.Collapsed,
+			children: this.children?.map(c => c.toJSON()),
+			cases: this.cases?.data.map(c => c.toJSON())
+		}
+	}
+
+	fromJSON(json: any) {
+		this.label = json.label;
+		this.url = json.url;
+		this.folder = json.folder;
+		this.collapsibleState = !this.folder ? vscode.TreeItemCollapsibleState.None : (json.collapsed ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.Expanded);
+		this.children = json.children?.map((c: any) => {
+			let item = new ProblemsItem(c.label, this, c.url, c.folder, c.collapsed);
+			item.fromJSON(c);
+			return item;
+		});
+		this.cases?.fromJSON(json.cases || []);
+
+		this.contextValue = this.folder ? "folder" : "problem";
+	}
+
+	getFolderOrCreate(folderName: string): ProblemsItem {
+		if (!this.children) this.children = [];
+		let folder = this.children.find(c => c.folder && c.label === folderName);
+		if (!folder) {
+			folder = new ProblemsItem(folderName, this, undefined, true);
+			this.push(folder);
+		}
+		return folder;
+	}
+
+	isLessThan(other: ProblemsItem): boolean {
+		if (this.folder && !other.folder) return true;
+		if (!this.folder && other.folder) return false;
+		return (this.label < other.label);
+	}
+
+	push(item: ProblemsItem) {
+		if (!this.folder) return;
+		if (!this.children) this.children = [];
+		item.parent = this;
+		this.children.push(item);
+		this.sort();
+	}
+
+	sort() {
+		if (!this.children) return;
+		this.children.sort((a, b) => {
+			if (a.isLessThan(b)) return -1;
+			if (b.isLessThan(a)) return 1;
+			return 0;
+		});
+	}
+
+
 }
