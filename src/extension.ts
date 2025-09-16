@@ -459,6 +459,9 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push({ dispose: () => clearInterval(timer) });
 
 	startListen(problemsExplorerProvider);
+
+	let color = new vscode.ThemeColor('editor.background');
+	console.log(color);
 }
 
 export function deactivate() {
