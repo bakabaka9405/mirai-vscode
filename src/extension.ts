@@ -449,7 +449,7 @@ export function activate(context: vscode.ExtensionContext) {
 	//load problems
 	let problemsJson = loadProblems();
 	problemsExplorerProvider.problemsRoot.fromJSON(problemsJson.problems);
-
+	problemsExplorerProvider.problemsRoot.folder = true;
 	problemsExplorerProvider.refresh();
 
 	//save problems
