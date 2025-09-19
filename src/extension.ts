@@ -313,6 +313,12 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.executeCommand('vscode.diff', uri1, uri2, "输出↔期望输出");
 	});
 
+	vscode.window.onDidChangeActiveColorTheme((e) => {
+		inputEditor.updateTheme();
+		outputEditor.updateTheme();
+		expectedOutputEditor.updateTheme();
+	});
+
 	// StatusBar
 
 	let statusBarTestPreset = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);

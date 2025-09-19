@@ -80,4 +80,8 @@ export class Editor implements vscode.WebviewViewProvider {
 	public reveal() {
 		this.webviewView?.show(true);
 	}
+
+	public updateTheme() {
+		this.webviewView?.webview.postMessage({ command: 'themeChanged' });
+	}
 }
