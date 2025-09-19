@@ -102,7 +102,7 @@ export class ProblemsItem extends vscode.TreeItem {
 
 	GetPath(): string {
 		if (!this.parent) return "";
-		console.log('label=', this.parent.GetPath() + "/" + this.label.replace(/[\/:*?"<>|]/g, ""))
+		// console.log('label=', this.parent.GetPath() + "/" + this.label.replace(/[\/:*?"<>|]/g, ""))
 		return this.parent.GetPath() + "/" + this.label.replace(/[\/:*?"<>|]/g, "");
 	}
 
