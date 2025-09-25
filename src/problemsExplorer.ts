@@ -80,9 +80,9 @@ export class ProblemsItem extends vscode.TreeItem {
 		public url?: string,
 		public folder: boolean = false,
 		public children?: ProblemsItem[],
-		public collapsibleState: vscode.TreeItemCollapsibleState = folder ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.None
+		public collapsed: boolean = false
 	) {
-		super(label, collapsibleState);
+		super(label, folder ? (collapsed ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.Expanded) : vscode.TreeItemCollapsibleState.None);
 		if (!folder) {
 			this.command = {
 				command: 'problemsExplorer.switchProblem',
@@ -93,7 +93,6 @@ export class ProblemsItem extends vscode.TreeItem {
 			this.contextValue = "problem";
 		}
 		else {
-			this.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
 			this.contextValue = "folder";
 		}
 	}
@@ -119,25 +118,21 @@ export class ProblemsItem extends vscode.TreeItem {
 			label: this.label,
 			url: this.url,
 			folder: this.folder,
-			collapsed: this.collapsibleState === vscode.TreeItemCollapsibleState.Collapsed,
+			collapsed: this.collapsed,
 			children: this.children?.map(c => c.toJSON()),
 			cases: this.cases?.data.map(c => c.toJSON())
 		}
 	}
 
-	fromJSON(json: any) {
-		this.label = json.label;
-		this.url = json.url;
-		this.folder = json.folder;
-		this.collapsibleState = !this.folder ? vscode.TreeItemCollapsibleState.None : (json.collapsed ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.Expanded);
-		this.children = json.children?.map((c: any) => {
-			let item = new ProblemsItem(c.label, this, c.url, c.folder, c.collapsed);
-			item.fromJSON(c);
-			return item;
-		});
-		this.cases?.fromJSON(json.cases || []);
-
-		this.contextValue = this.folder ? "folder" : "problem";
+	static fromJSON(json: any) {
+		return new ProblemsItem(
+			json.label,
+			undefined,
+			json.url,
+			json.folder,
+			json.children?.map((c: any) => ProblemsItem.fromJSON(c)),
+			json.collapsed
+		);
 	}
 
 	getFolderOrCreate(folderName: string): ProblemsItem {

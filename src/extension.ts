@@ -44,8 +44,15 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 	// ProblemsExplorer
 	const problemsExplorerProvider = new ProblemsExplorerProvider();
-	problemsExplorerView = vscode.window.createTreeView('problemsExplorer', { treeDataProvider: problemsExplorerProvider });
 	context.subscriptions.push(vscode.window.registerTreeDataProvider('problemsExplorer', problemsExplorerProvider));
+	problemsExplorerView = vscode.window.createTreeView('problemsExplorer', { treeDataProvider: problemsExplorerProvider });
+	context.subscriptions.push(problemsExplorerView);
+	problemsExplorerView.onDidExpandElement(e => {
+		e.element.collapsed = false;
+	});
+	problemsExplorerView.onDidCollapseElement(e => {
+		e.element.collapsed = true;
+	});
 	registerCommand('problemsExplorer.addProblem', (element?: ProblemsItem) => {
 		problemsExplorerProvider.onBtnAddProblemClicked(element || problemsExplorerProvider.problemsRoot);
 	});
@@ -454,7 +461,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	//load problems
 	let problemsJson = loadProblems();
-	problemsExplorerProvider.problemsRoot.fromJSON(problemsJson.problems);
+	problemsExplorerProvider.problemsRoot = ProblemsItem.fromJSON(problemsJson.problems);
 	problemsExplorerProvider.problemsRoot.folder = true;
 	problemsExplorerProvider.refresh();
 
