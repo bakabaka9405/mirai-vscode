@@ -24,15 +24,23 @@ function rgbaToHex(rgba) {
 	const hexA = alpha.toString(16).padStart(2, '0'); // Alpha 的十六进制值
 
 	// 返回完整的十六进制颜色代码 (包括 alpha)
-	return `#${hexA}${hexR}${hexG}${hexB}`;
+	return `#${hexR}${hexG}${hexB}${hexA}`;
 }
 
 function readVsCodeColor(name) {
 	const styles = getComputedStyle(document.documentElement);
-	console.log(name, styles.getPropertyValue(`--vscode-${name}`).trim());
 	let res = styles.getPropertyValue(`--vscode-${name}`).trim();
+	let backup = res;
 	if (res.startsWith('rgba')) res = rgbaToHex(res);
+	console.log(name, backup, res);
 	return res;
+}
+
+function addThemeStyle(colors, family, attrs) {
+	for (const attr of attrs) {
+		let color = readVsCodeColor(`${family}-${attr}`);
+		if (color) colors[`${family}.${attr}`] = color;
+	}
 }
 
 
@@ -48,35 +56,40 @@ require(['vs/editor/editor.main'], function () {
 		lineDecorationsWidth: 1,
 		contextmenu: false,
 		fontFamily: "'Jetbrains Mono Medium','Microsoft YaHei Mono',Consolas,'Microsoft YaHei', monospace",
-		quickSuggestions: false
+		quickSuggestions: false,
 	});
-	const cl = document.body.classList;
-	console.log(cl);
 
 	function updateTheme() {
-		let colors = {
-			'editor.background': readVsCodeColor('editor-background'),
-			'editor.foreground': readVsCodeColor('editor-foreground'),
-			'editorGutter.background': readVsCodeColor('editorGutter-background'),
-		};
-		let lineHighlightBackground = readVsCodeColor('editor-lineHighlightBackground');
-		if (lineHighlightBackground) colors['editor.lineHighlightBackground'] = lineHighlightBackground;
-		let lineHighlightBorder = readVsCodeColor('editor-lineHighlightBorder');
-		if (lineHighlightBorder) colors['editor.lineHighlightBorder'] = lineHighlightBorder;
-		let selectionBackground = readVsCodeColor('editor-selectionBackground');
-		if (selectionBackground) colors['editor.selectionBackground'] = selectionBackground;
-		let selectionHighlightBackground = readVsCodeColor('editor.selectionHighlightBackground');
-		if (selectionHighlightBackground) colors['editor.selectionHighlightBackground'] = selectionHighlightBackground;
-		let inactiveSelectionBackground = readVsCodeColor('editor-inactiveSelectionBackground');
-		if (inactiveSelectionBackground) colors['editor.inactiveSelectionBackground'] = inactiveSelectionBackground;
-
-
-		console.log("colors:", colors);
+		let colors = {};
+		addThemeStyle(colors, 'editor', [
+			'background',
+			'foreground',
+			'lineHighlightBackground',
+			// 'lineHighlightBorder',
+			'selectionForeground',
+			'selectionBackground',
+			'selectionHighlightBackground',
+			'inactiveSelectionBackground',
+			'wordHighlightBackground',
+			'wordHighlightBorder',
+			'wordHighlightStrongBackground',
+			'wordHighlightStrongBorder',
+		]);
+		addThemeStyle(colors, 'editorGutter', [
+			'background',
+		]);
+		addThemeStyle(colors, 'editorLineNumber', [
+			'foreground',
+			'activeForeground',
+		]);
+		addThemeStyle(colors, 'editorCursor', [
+			'foreground',
+		]);
 
 		monaco.editor.defineTheme('myTheme', {
-			base: 'vs-dark',  // 基于暗色主题
-			inherit: true,  // 继承基主题的设置
-			rules: [],  // 自定义的语法高亮规则
+			base: 'vs',
+			inherit: false,
+			rules: [],
 			colors: colors,
 		});
 	}
@@ -84,7 +97,7 @@ require(['vs/editor/editor.main'], function () {
 	monaco.editor.setTheme('myTheme');
 	window.addEventListener('message', event => {
 		const message = event.data; // The JSON data our extension sent
-		console.log("message:", message);
+		// console.log("message:", message);
 		switch (message.command) {
 			case 'getText':
 				vscode.postMessage({ command: 'response', data: editor.getValue() });
