@@ -124,8 +124,8 @@ export class ProblemsItem extends vscode.TreeItem {
 		}
 	}
 
-	static fromJSON(json: any) {
-		return new ProblemsItem(
+	static fromJSON(json: any): ProblemsItem {
+		const item = new ProblemsItem(
 			json.label,
 			undefined,
 			json.url,
@@ -133,6 +133,14 @@ export class ProblemsItem extends vscode.TreeItem {
 			json.children?.map((c: any) => ProblemsItem.fromJSON(c)),
 			json.collapsed
 		);
+		if (item.children) {
+			for (const c of item.children) {
+				c.parent = item;
+			}
+		}
+		item.cases = new CaseList();
+		item.cases.fromJSON(json.cases || []);
+		return item;
 	}
 
 	getFolderOrCreate(folderName: string): ProblemsItem {

@@ -14,7 +14,6 @@ import { generateAllCompileCommandJson } from "./compileCommandsGenerator"
 let problemsExplorerView: vscode.TreeView<ProblemsItem>;
 let caseView: vscode.TreeView<CaseNode>;
 
-let currentTestPresetLabel: string | undefined;
 let currentTestPreset: TestPreset | undefined;
 
 let overridingStd: string | undefined;
@@ -89,6 +88,7 @@ export function activate(context: vscode.ExtensionContext) {
 			return;
 		}
 		let file = vscode.workspace.workspaceFolders[0].uri.fsPath;
+		console.log("element:", element);
 		file = path.join(file, getConfig<string>("src_base_dir") || "", element.GetPath() + ".cpp");
 		fs.mkdirSync(path.dirname(file), { recursive: true });
 		if (!fs.existsSync(file)) {
@@ -336,10 +336,11 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(statusBarTestPreset);
 
 	registerCommand('mirai-vscode.onBtnToggleTestPresetClicked', async () => {
-		let items: { label: string, description: string }[] = testPresets.map((preset) => {
+		let items: { label: string, description: string, index: number }[] = testPresets.map((preset, index) => {
 			return {
 				label: preset.label,
-				description: preset.description
+				description: preset.description,
+				index: index,
 			}
 		});
 		if (items.length == 0) {
@@ -351,27 +352,18 @@ export function activate(context: vscode.ExtensionContext) {
 		});
 
 		if (selected) {
-			currentTestPreset = testPresets.find((preset) => preset.label == selected!.label);
-			if (!currentTestPreset) {
-				vscode.window.showErrorMessage("未找到预设");
-				statusBarTestPreset.text = "编译测试预设";
-			}
-			else {
-				currentTestPresetLabel = statusBarTestPreset.text = currentTestPreset.label;
-			}
+			currentTestPreset = testPresets[selected.index];
+			statusBarTestPreset.text = currentTestPreset.label;
 			clearCompileCache();
 			_onDidTestPresetChanged.fire(currentTestPreset);
 		}
 	});
 
 	onDidConfigChanged(() => {
-		if (currentTestPresetLabel) {
-			currentTestPreset = testPresets.find((preset) => preset.label == currentTestPresetLabel);
-			if (!currentTestPreset) {
-				currentTestPresetLabel = undefined;
-				statusBarTestPreset.text = "编译测试预设";
-				_onDidTestPresetChanged.fire(undefined);
-			}
+		if (currentTestPreset) {
+			currentTestPreset = undefined;
+			statusBarTestPreset.text = "编译测试预设";
+			_onDidTestPresetChanged.fire(undefined);
 		}
 		_onCompileCommandsNeedUpdate.fire();
 	});
@@ -464,6 +456,7 @@ export function activate(context: vscode.ExtensionContext) {
 	problemsExplorerProvider.problemsRoot = ProblemsItem.fromJSON(problemsJson.problems);
 	problemsExplorerProvider.problemsRoot.folder = true;
 	problemsExplorerProvider.refresh();
+	console.log(problemsExplorerProvider.problemsRoot);
 
 	//save problems
 	let timer = setInterval(() => {

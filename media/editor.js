@@ -32,7 +32,7 @@ function readVsCodeColor(name) {
 	let res = styles.getPropertyValue(`--vscode-${name}`).trim();
 	let backup = res;
 	if (res.startsWith('rgba')) res = rgbaToHex(res);
-	console.log(name, backup, res);
+	// console.log(name, backup, res);
 	return res;
 }
 

@@ -1,11 +1,22 @@
 import * as vscode from 'vscode';
-import { TestPreset, checkTestPresetLabelUniqueness } from './testPreset';
-import { getAbsolutePath } from './util';
+import { TestPreset } from './testPreset';
+import { getAbsolutePath, getAllExecutable } from './util';
+import { execSync } from 'child_process';
 let config: vscode.WorkspaceConfiguration;
 export let testPresets: TestPreset[];
 
 let _onDidConfigChanged = new vscode.EventEmitter<void>();
 export const onDidConfigChanged = _onDidConfigChanged.event;
+
+function getCompilerVersion(compilerPath: string): string | null {
+	try {
+		const output = execSync(`"${compilerPath}" -dumpversion`, { encoding: 'utf-8' });
+		return output.trim();
+	} catch (error) {
+		console.error("Error getting compiler version:", error);
+		return null;
+	}
+}
 
 function refreshConfig() {
 	config = vscode.workspace.getConfiguration("mirai-vscode");
@@ -14,9 +25,14 @@ function refreshConfig() {
 	testPresets.forEach((p) => {
 		p.additionalIncludePaths = p.additionalIncludePaths.map((p) => getAbsolutePath(p));
 	});
-	let duplicateLabel = checkTestPresetLabelUniqueness(testPresets);
-	if (duplicateLabel) {
-		vscode.window.showErrorMessage(`检测到重复的预设名: ${duplicateLabel}，将总是使用同名的第一个预设。`);
+	if (config.get<boolean>("auto_search_compiler")) {
+		const compilers = ["g++", "clang++"];
+		for (const compiler of compilers) {
+			const paths = getAllExecutable(compiler);
+			for (const p of paths) {
+				testPresets.push(new TestPreset(`${compiler} ${getCompilerVersion(p)}`, p, p));
+			}
+		}
 	}
 }
 

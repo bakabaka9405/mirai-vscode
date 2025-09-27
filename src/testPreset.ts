@@ -4,6 +4,7 @@ export class TestPreset {
 	constructor(
 		public label: string,
 		public compilerPath: string,
+		public description: string = "",
 		public std: string = "",
 		public optimization: string = "",
 		public additionalArgs: string[] = [],
@@ -11,7 +12,6 @@ export class TestPreset {
 		public timeoutSec: number = 1,
 		public memoryLimitMB: number = 512,
 		public mixStdoutStderr: boolean = false,
-		public description: string = ""
 	) { }
 
 
@@ -20,15 +20,16 @@ export class TestPreset {
 		let ext = path.extname(file);
 		let relativePath = path.relative(basePath, file);
 		//console.log(relativePath)
-		let res = path.join(outputPath, path.dirname(relativePath), path.basename(relativePath, ext) + ".exe");
+		// let res = path.join(outputPath, path.dirname(relativePath), path.basename(relativePath, ext) + ".exe");
 		//console.log(res);
-		return path.join(outputPath,path.dirname(relativePath), path.basename(relativePath, ext) + ".exe");
+		return path.join(outputPath, path.dirname(relativePath), path.basename(relativePath, ext) + ".exe");
 	}
 
 	public static fromObject(obj: any): TestPreset {
 		return new TestPreset(
 			obj.name,
 			obj.compilerPath,
+			obj.description,
 			obj.std,
 			obj.optimization,
 			obj.additionalArgs.slice(),
@@ -36,7 +37,6 @@ export class TestPreset {
 			obj.timeoutSec,
 			obj.memoryLimitMB,
 			obj.mixStdoutStderr,
-			obj.description
 		);
 	}
 
@@ -55,15 +55,4 @@ export class TestPreset {
 	public generateCompileCommand(file: string, basePath: string, outputPath: string): string {
 		return `${this.compilerPath} ${this.generateCompileArgs(file, basePath, outputPath).join(" ")}`;
 	}
-}
-
-export function checkTestPresetLabelUniqueness(presets: TestPreset[]): string | null {
-	let labels = new Set<string>();
-	for (let preset of presets) {
-		if (labels.has(preset.label)) {
-			return preset.label;
-		}
-		labels.add(preset.label);
-	}
-	return null;
 }

@@ -243,7 +243,7 @@ export async function doSingleTest(preset: TestPreset, testCase: CaseNode, force
 	outputChannel.clear();
 	outputChannel.appendLine(output);
 	//outputChannel.show();
-	if (message !== "No change") await sleep(500);
+	// if (message !== "No change") await sleep(500);
 	if (code === 0) {
 		const result = await vscode.window.withProgress({
 			location: vscode.ProgressLocation.Notification,
@@ -301,7 +301,7 @@ export async function doTest(preset: TestPreset, testCases: CaseNode[], caseView
 			cancellable: true
 		}, async (progress, token) => {
 			//await preheat(preset.getExecutableFile(sourceFile), []);
-			if (message !== "No change") await sleep(500);
+			// if (message !== "No change") await sleep(500);
 			for (let c of testCases) {
 				if (token.isCancellationRequested) {
 					c.iconPath = undefined;

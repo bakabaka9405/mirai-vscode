@@ -347,7 +347,7 @@
 				"mirai-vscode.compile_commands_path": {
 					"type": "string",
 					"description": "compile_commands.json 相对项目根目录的路径",
-					"default": ""
+					"default": ".vscode"
 				},
 				"mirai-vscode.src_base_dir": {
 					"type": "string",
@@ -358,6 +358,11 @@
 					"type": "string",
 					"description": "编译输出的基目录相对项目根目录的路径",
 					"default": "/build"
+				},
+				"mirai-vscode.auto_search_compiler": {
+					"type": "boolean",
+					"description": "自动搜索编译器",
+					"default": true
 				},
 				"mirai-vscode.test_presets": {
 					"type": "array",
