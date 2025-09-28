@@ -273,7 +273,7 @@ export async function compileAndRun(preset: TestPreset, forceCompile: boolean = 
 	outputChannel.appendLine(output);
 	//outputChannel.show(false);
 	if (code === 0) {
-		if (!terminal) terminal = vscode.window.createTerminal("mirai-vscode:编译运行");
+		if (!terminal || terminal.exitStatus) terminal = vscode.window.createTerminal("mirai-vscode:编译运行");
 		terminal.sendText(`& "${preset.getExecutableFile(sourceFile, basePath, outputPath)}"`);
 		terminal.show();
 	}
