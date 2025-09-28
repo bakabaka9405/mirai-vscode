@@ -44,7 +44,10 @@ export function activate(context: vscode.ExtensionContext) {
 	// ProblemsExplorer
 	const problemsExplorerProvider = new ProblemsExplorerProvider();
 	context.subscriptions.push(vscode.window.registerTreeDataProvider('problemsExplorer', problemsExplorerProvider));
-	problemsExplorerView = vscode.window.createTreeView('problemsExplorer', { treeDataProvider: problemsExplorerProvider });
+	problemsExplorerView = vscode.window.createTreeView('problemsExplorer', {
+		treeDataProvider: problemsExplorerProvider,
+		dragAndDropController: problemsExplorerProvider,
+	});
 	context.subscriptions.push(problemsExplorerView);
 	problemsExplorerView.onDidExpandElement(e => {
 		e.element.collapsed = false;
@@ -55,7 +58,10 @@ export function activate(context: vscode.ExtensionContext) {
 	registerCommand('problemsExplorer.addProblem', (element?: ProblemsItem) => {
 		problemsExplorerProvider.onBtnAddProblemClicked(element || problemsExplorerProvider.problemsRoot);
 	});
-	registerCommand('problemsExplorer.addFolder', (element?: ProblemsItem) => {
+	registerCommand('problemsExplorer.addFolder', () => {
+		problemsExplorerProvider.onBtnAddFolderClicked(problemsExplorerProvider.problemsRoot);
+	});
+	registerCommand('problemsExplorer.addFolderInline', (element?: ProblemsItem) => {
 		problemsExplorerProvider.onBtnAddFolderClicked(element || problemsExplorerProvider.problemsRoot);
 	});
 	registerCommand('problemsExplorer.addProblemFromFolder', () => { });
@@ -88,7 +94,7 @@ export function activate(context: vscode.ExtensionContext) {
 			return;
 		}
 		let file = vscode.workspace.workspaceFolders[0].uri.fsPath;
-		console.log("element:", element);
+		// console.log("element:", element);
 		file = path.join(file, getConfig<string>("src_base_dir") || "", element.GetPath() + ".cpp");
 		fs.mkdirSync(path.dirname(file), { recursive: true });
 		if (!fs.existsSync(file)) {
@@ -125,7 +131,6 @@ export function activate(context: vscode.ExtensionContext) {
 		clearCompileCache();
 		vscode.window.showInformationMessage("已清除");
 	});
-
 	registerCommand('explorer.compileAndRun', async () => {
 		await vscode.workspace.saveAll(false);
 		if (!currentTestPreset) {
@@ -137,7 +142,6 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 		compileAndRun(packTestPreset()!);
 	});
-
 	registerCommand('explorer.compileAndRunForceCompile', async () => {
 		await vscode.workspace.saveAll(false);
 		if (!currentTestPreset) {
@@ -149,7 +153,6 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 		compileAndRun(packTestPreset()!, true);
 	});
-
 	registerCommand('caseView.testAllCase', async () => {
 		inputEditor.reveal();
 		await vscode.workspace.saveAll(false);
@@ -163,7 +166,6 @@ export function activate(context: vscode.ExtensionContext) {
 		await doTest(packTestPreset()!, caseViewProvider.getChildren(), caseViewProvider, caseView);
 		showCurrentCaseContent();
 	});
-
 	registerCommand('caseView.testAllCaseForceCompile', async () => {
 		inputEditor.reveal();
 		await vscode.workspace.saveAll(false);
@@ -177,7 +179,6 @@ export function activate(context: vscode.ExtensionContext) {
 		await doTest(packTestPreset()!, caseViewProvider.getChildren(), caseViewProvider, caseView, true);
 		showCurrentCaseContent();
 	});
-
 	registerCommand('caseView.testSingleCase', async (element: CaseNode) => {
 		await vscode.workspace.saveAll(false);
 		caseView.reveal(element);
@@ -397,7 +398,7 @@ export function activate(context: vscode.ExtensionContext) {
 		if (!currentTestPreset) {
 			vscode.window.showErrorMessage("未选择编译预设");
 			return;
-		}
+		}	
 		let items = [currentTestPreset?.std ? `不改变（${currentTestPreset.std}）` : "不改变", "c++98", "c++11", "c++14", "c++17", "c++20", "c++23", "c++26"];
 		let selected = await vscode.window.showQuickPick(items, {
 			placeHolder: items[0]
@@ -440,14 +441,11 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 	let watcher = vscode.workspace.createFileSystemWatcher("**/*.cpp", false, true, false);
-	//console.log("watching");
 	watcher.onDidCreate((e) => {
 		_onCompileCommandsNeedUpdate.fire();
-		console.log(`File created: ${e.path}`);
 	});
 	watcher.onDidDelete((e) => {
 		_onCompileCommandsNeedUpdate.fire();
-		console.log(`File deleted: ${e.path}`);
 	});
 	context.subscriptions.push(watcher);
 
@@ -465,9 +463,6 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push({ dispose: () => clearInterval(timer) });
 
 	startListen(problemsExplorerProvider);
-
-	let color = new vscode.ThemeColor('editor.background');
-	console.log(color);
 }
 
 export function deactivate() {

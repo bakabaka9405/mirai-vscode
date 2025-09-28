@@ -27,7 +27,7 @@ export class TestPreset {
 
 	public static fromObject(obj: any): TestPreset {
 		return new TestPreset(
-			obj.name,
+			obj.label,
 			obj.compilerPath,
 			obj.description,
 			obj.std,

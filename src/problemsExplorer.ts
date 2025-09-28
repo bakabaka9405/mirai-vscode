@@ -1,7 +1,9 @@
 import * as vscode from 'vscode'
 import { CaseList } from './caseView'
 
-export class ProblemsExplorerProvider implements vscode.TreeDataProvider<ProblemsItem> {
+export class ProblemsExplorerProvider implements vscode.TreeDataProvider<ProblemsItem>, vscode.TreeDragAndDropController<ProblemsItem> {
+	readonly dragMimeTypes = ['application/vnd.code.tree.problemsExplorer'];
+	readonly dropMimeTypes = ['application/vnd.code.tree.problemsExplorer'];
 	private _onDidChangeTreeData: vscode.EventEmitter<ProblemsItem | undefined | void> = new vscode.EventEmitter<ProblemsItem | undefined | void>();
 	readonly onDidChangeTreeData: vscode.Event<ProblemsItem | undefined | void> = this._onDidChangeTreeData.event;
 	public problemsRoot: ProblemsItem = new ProblemsItem("", undefined, undefined, true, []);
@@ -69,6 +71,27 @@ export class ProblemsExplorerProvider implements vscode.TreeDataProvider<Problem
 				this.refresh();
 			}
 		}
+	}
+
+	handleDrag(source: readonly ProblemsItem[], dataTransfer: vscode.DataTransfer, token: vscode.CancellationToken): Thenable<void> | void {
+		dataTransfer.set('application/vnd.code.tree.problemsExplorer', new vscode.DataTransferItem(source));
+	}
+
+	async handleDrop(target: ProblemsItem | undefined, dataTransfer: vscode.DataTransfer, token: vscode.CancellationToken): Promise<void> {
+		if (!target) target = this.problemsRoot;
+		const transferItem = dataTransfer.get('application/vnd.code.tree.problemsExplorer');
+		if (!transferItem) return;
+		const sources = transferItem.value as ProblemsItem[];
+		if (!sources || sources.length === 0) return;
+		if (!target.folder) return;
+		for (const source of sources) {
+			if (source === target) continue;
+			if (!source.parent) continue;
+			if (!source.children) source.children = [];
+			source.parent.children?.splice(source.parent.children.indexOf(source), 1);
+			target.push(source);
+		}
+		this.refresh();
 	}
 }
 
@@ -144,6 +167,7 @@ export class ProblemsItem extends vscode.TreeItem {
 	}
 
 	getFolderOrCreate(folderName: string): ProblemsItem {
+		console.log(this.label);
 		if (!this.children) this.children = [];
 		let folder = this.children.find(c => c.folder && c.label === folderName);
 		if (!folder) {

@@ -108,6 +108,11 @@
 				"icon": "media/folder-add.svg"
 			},
 			{
+				"command": "problemsExplorer.addFolderInline",
+				"title": "添加文件夹",
+				"icon": "media/folder-add.svg"
+			},
+			{
 				"command": "problemsExplorer.deleteProblem",
 				"title": "删除试题",
 				"icon": "media/delete.svg"
@@ -275,7 +280,7 @@
 					"group": "inline"
 				},
 				{
-					"command": "problemsExplorer.addFolder",
+					"command": "problemsExplorer.addFolderInline",
 					"when": "view==problemsExplorer && viewItem==folder",
 					"group": "inline"
 				},
@@ -370,7 +375,7 @@
 					"items": {
 						"type": "object",
 						"properties": {
-							"name": {
+							"label": {
 								"type": "string",
 								"description": "名称"
 							},
