@@ -207,10 +207,11 @@ function compareOutput(output: string, expected: string) {
 }
 
 async function doSingleTestImpl(preset: TestPreset, file: string, basePath: string, outputPath: string, testCase: CaseNode, token: vscode.CancellationToken) {
+	testCase.description = "";
 	let { code, time, memory, message, output } =
 		await runSubprocess(preset.getExecutableFile(file, basePath, outputPath), [], preset.timeoutSec, preset.memoryLimitMB, testCase.input, preset.mixStdoutStderr, token);
 	testCase.output = output || "";
-	console.log('time:', time);
+	// console.log('time:', time);
 	if (code === 0) {
 		if (compareOutput(testCase.output, testCase.expectedOutput)) {
 			testCase.iconPath = { light: ac_icon, dark: ac_icon };
@@ -218,6 +219,7 @@ async function doSingleTestImpl(preset: TestPreset, file: string, basePath: stri
 		else {
 			testCase.iconPath = { light: wa_icon, dark: wa_icon };
 		}
+		testCase.description = `${time?.toFixed(0)} ms`;
 	}
 	else if (code == null && message == 'Time limit exceeded') {
 		testCase.iconPath = { light: tle_icon, dark: tle_icon };
@@ -231,7 +233,7 @@ async function doSingleTestImpl(preset: TestPreset, file: string, basePath: stri
 	else if ((code == null && message == 'Runtime Error') || code !== 0) {
 		testCase.iconPath = { light: re_icon, dark: re_icon };
 	}
-	console.log(message);
+	// console.log(message);
 }
 
 let outputChannel = vscode.window.createOutputChannel("Mirai-vscode：编译输出");
