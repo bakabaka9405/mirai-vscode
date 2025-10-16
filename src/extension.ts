@@ -18,12 +18,14 @@ let currentTestPreset: TestPreset | undefined;
 
 let overridingStd: string | undefined;
 let overridingOptimizaion: string | undefined;
+let overridingTimeLimit: number | undefined;
 
 function packTestPreset(isDebugging: boolean = false): TestPreset | undefined {
 	if (!currentTestPreset) return undefined;
 	let preset: TestPreset = TestPreset.fromObject(currentTestPreset);
 	if (overridingStd) preset.std = overridingStd;
 	if (overridingOptimizaion) preset.optimization = overridingOptimizaion;
+	if (overridingTimeLimit !== undefined) preset.timeoutSec = overridingTimeLimit;
 	if (isDebugging) {
 		preset.additionalArgs.push("-gdwarf-4");
 		preset.optimization = "O0";
@@ -381,8 +383,11 @@ export function activate(context: vscode.ExtensionContext) {
 	onDidTestPresetChanged((preset) => {
 		_onCompileCommandsNeedUpdate.fire();
 		vscode.commands.executeCommand('clangd.restart');
-		if (!overridingStd) statusBarOverridingStd.text = preset?.std ? `不改变（${preset.std}）` : "不改变";
-		if (!overridingOptimizaion) statusBarOverridingOptimization.text = preset?.optimization ? `不改变（${preset.optimization}）` : "不改变";
+		if (!overridingStd) statusBarOverridingStd.text = preset?.std ? `不改变（${preset.std}）` : "不改变（默认）";
+		if (!overridingOptimizaion) statusBarOverridingOptimization.text = preset?.optimization ? `不改变（${preset.optimization}）` : "不改变（默认）";
+		if (overridingTimeLimit === undefined) {
+			statusBarOverridingTimeLimit.text = preset?.timeoutSec ? `不改变（${preset.timeoutSec}秒）` : "不改变（无限制）";
+		}
 	});
 
 	onCompileCommandsNeedUpdate(() => {
@@ -435,19 +440,47 @@ export function activate(context: vscode.ExtensionContext) {
 			vscode.window.showErrorMessage("未选择编译预设");
 			return;
 		}
-		let items = [currentTestPreset?.optimization ? `不改变（${currentTestPreset.optimization}）` : "不改变", "O0", "O1", "O2", "O3", "Ofast", "Og", "Os"];
-		let selected = await vscode.window.showQuickPick(items, {
+		let items = [`不改变（${currentTestPreset?.optimization || "默认"}）`, "默认", "O0", "O1", "O2", "O3", "Ofast", "Og", "Os"];
+		let selected = await vscode.window.showQuickPick(items.map((v, i) => ({ label: v, index: i })), {
 			placeHolder: items[0]
 		});
 
 		if (selected) {
-			if (items.findIndex(v => v == selected) == 0) overridingOptimizaion = undefined;
-			else overridingOptimizaion = selected;
-			statusBarOverridingOptimization.text = selected;
+			if (selected.index == 0) overridingOptimizaion = undefined;
+			else if (selected.index == 1) overridingOptimizaion = "";
+			else overridingOptimizaion = selected.label;
+			statusBarOverridingOptimization.text = selected.label;
 			_onCompileCommandsNeedUpdate.fire();
 			clearCompileCache();
 		}
 	});
+
+	let statusBarOverridingTimeLimit = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
+	statusBarOverridingTimeLimit.text = "不改变";
+	statusBarOverridingTimeLimit.tooltip = "重载时间限制";
+	statusBarOverridingTimeLimit.command = "mirai-vscode.onBtnToggleOverridingTimeLimitClicked";
+	statusBarOverridingTimeLimit.show();
+	context.subscriptions.push(statusBarOverridingTimeLimit);
+
+	registerCommand('mirai-vscode.onBtnToggleOverridingTimeLimitClicked', async () => {
+		if (!currentTestPreset) {
+			vscode.window.showErrorMessage("未选择编译预设");
+			return;
+		}
+		let items = [currentTestPreset?.timeoutSec ? `不改变（${currentTestPreset.timeoutSec}秒）` : "不改变", "无限制", "1秒", "2秒", "3秒", "5秒", "10秒", "20秒", "30秒", "60秒"];
+		let selected = await vscode.window.showQuickPick(items.map((v, i) => ({ label: v, index: i })), {
+			placeHolder: items[0]
+		});
+
+		if (selected) {
+			if (selected.index == 0) overridingTimeLimit = undefined;
+			else if (selected.index == 1) overridingTimeLimit = 0;
+			else overridingTimeLimit = parseInt(selected.label.replace("秒", ""));
+			statusBarOverridingTimeLimit.text = selected.label;
+		}
+	});
+	statusBarOverridingTimeLimit.text = "不改变";
+	context.subscriptions.push(statusBarOverridingTimeLimit);
 
 	let watcher = vscode.workspace.createFileSystemWatcher("**/*.cpp", false, true, false);
 	watcher.onDidCreate((e) => {

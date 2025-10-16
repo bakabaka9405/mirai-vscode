@@ -65,7 +65,7 @@ export class CaseViewProvider implements vscode.TreeDataProvider<CaseNode> {
 			value: element.name
 		});
 		if (name) {
-			element.setLabel(name);
+			element.updateLabel(name);
 			this.refresh();
 		}
 	}
@@ -169,7 +169,7 @@ export class CaseNode extends vscode.TreeItem {
 			arguments: [this]
 		};
 
-		this.setLabel(name);
+		this.updateLabel(name);
 	}
 
 	public get input(): string {
@@ -192,16 +192,16 @@ export class CaseNode extends vscode.TreeItem {
 		else if (fs.existsSync(this._expectedOutput)) fs.writeFileSync(this._expectedOutput, expectedOutput, 'utf-8');
 	}
 
-	public setLabel(name: string) {
-		this.name = name;
+	public updateLabel(name?: string) {
+		if (name) this.name = name;
 		if (this.external) {
 			this.label = {
-				label: "(external) " + name,
+				label: "(external) " + this.name,
 				highlights: [[0, 10]]
 			};
 		}
 		else {
-			this.label = name;
+			this.label = this.name;
 		}
 	}
 
@@ -218,12 +218,13 @@ export class CaseNode extends vscode.TreeItem {
 	}
 
 	fromJSON(json: any) {
+		this.name = json.name || "undefined";
 		this.external = json.external || false;
 		this.enabled = json.enabled || false;
 		this._input = json.input || "";
 		this.output = "";
 		this._expectedOutput = json.expectedOutput || "";
-		this.setLabel(json.name || "undefined");
+		this.updateLabel();
 		this.checkboxState = this.enabled ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked;
 	}
 }

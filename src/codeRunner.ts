@@ -25,10 +25,6 @@ export function stopRunning() {
 	_onStopRunning.fire();
 }
 
-function sleep(ms: number) {
-	return new Promise(resolve => setTimeout(resolve, ms));
-}
-
 function runSubprocess(file: string, args: string[], timeoutSec: number, memoryLimitMB: number, input: string,
 	mixStdoutStderr: boolean, token: vscode.CancellationToken)
 	: Promise<{ code: number | null, time: number | null, memory: number | null, message: string, output: string | null }> {
@@ -37,7 +33,7 @@ function runSubprocess(file: string, args: string[], timeoutSec: number, memoryL
 		let startTime: bigint;
 		const child = spawn(file, args, { windowsHide: true });
 		let maxMemoryUsage = 0;
-		const timeoutId = setTimeout(() => {
+		const timeoutId = timeoutSec > 0 ? setTimeout(() => {
 			child.kill();
 			resolve({
 				code: null,
@@ -46,7 +42,7 @@ function runSubprocess(file: string, args: string[], timeoutSec: number, memoryL
 				message: 'Time limit exceeded',
 				output
 			});
-		}, timeoutSec * 1000);
+		}, timeoutSec * 1000) : undefined;
 		child.on('spawn', () => { startTime = process.hrtime.bigint() });
 		//listen onStopRunning
 		const stop_listener = onStopRunning(() => {
@@ -116,7 +112,8 @@ async function isProgramInPath(program: string) {
 }
 
 async function compile(preset: TestPreset, srcFile: string, basePath: string, outputPath: string, force: boolean = false) {
-	const md5 = getFileMD5(srcFile) + getObjectMD5(preset);
+	const command = preset.generateCompileCommand(srcFile, basePath, outputPath);
+	const md5 = getFileMD5(srcFile) + command;
 	if (file_md5_table.get(srcFile) === md5 && !force) {
 		return Promise.resolve({ code: 0, message: "No change", output: "" });
 	}
@@ -129,7 +126,7 @@ async function compile(preset: TestPreset, srcFile: string, basePath: string, ou
 		cancellable: true
 	}, async (progress, token) => {
 		return new Promise<{ code: number, message: string, output: string }>((resolve) => {
-			console.log(preset.generateCompileCommand(srcFile, basePath, outputPath));
+			// console.log(preset.generateCompileCommand(srcFile, basePath, outputPath));
 			fs.mkdirSync(path.dirname(preset.getExecutableFile(srcFile, basePath, outputPath)), { recursive: true });
 			const child = spawn(preset.compilerPath, preset.generateCompileArgs(srcFile, basePath, outputPath),
 				{ windowsHide: true });
