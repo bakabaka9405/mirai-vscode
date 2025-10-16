@@ -57,6 +57,7 @@ require(['vs/editor/editor.main'], function () {
 		contextmenu: false,
 		fontFamily: "'Jetbrains Mono Medium','Microsoft YaHei Mono',Consolas,'Microsoft YaHei', monospace",
 		quickSuggestions: false,
+		readOnly: InitialReadOnly || false,
 	});
 
 	function updateTheme() {
@@ -104,10 +105,6 @@ require(['vs/editor/editor.main'], function () {
 				break;
 			case 'setText':
 				editor.setValue(message.data);
-				break;
-			case 'setReadOnly':
-				//console.log("setreadonly");
-				editor.updateOptions({ readOnly: message.data || true });
 				break;
 			case 'themeChanged':
 				updateTheme();

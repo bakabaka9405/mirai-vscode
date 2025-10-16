@@ -24,7 +24,7 @@ export class ProblemsExplorerProvider implements vscode.TreeDataProvider<Problem
 	public async onBtnRenameProblemOrFolderClicked(element: ProblemsItem) {
 		const newName = await vscode.window.showInputBox({
 			placeHolder: "New name",
-			value: element.label
+			value: element.name
 		});
 		if (newName) {
 			element.setLabel(newName);
@@ -98,14 +98,14 @@ export class ProblemsExplorerProvider implements vscode.TreeDataProvider<Problem
 
 export class ProblemsItem extends vscode.TreeItem {
 	constructor(
-		public label: string,
+		public name: string,
 		public parent?: ProblemsItem,
 		public url?: string,
 		public folder: boolean = false,
 		public children?: ProblemsItem[],
 		public collapsed: boolean = false
 	) {
-		super(label, folder ? (collapsed ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.Expanded) : vscode.TreeItemCollapsibleState.None);
+		super(name, folder ? (collapsed ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.Expanded) : vscode.TreeItemCollapsibleState.None);
 		if (!folder) {
 			this.command = {
 				command: 'problemsExplorer.switchProblem',
@@ -125,11 +125,11 @@ export class ProblemsItem extends vscode.TreeItem {
 	GetPath(): string {
 		if (!this.parent) return "";
 		// console.log('label=', this.parent.GetPath() + "/" + this.label.replace(/[\/:*?"<>|]/g, ""))
-		return this.parent.GetPath() + "/" + this.label.replace(/[\/:*?"<>|]/g, "");
+		return this.parent.GetPath() + "/" + this.name.replace(/[\/:*?"<>|]/g, "");
 	}
 
 	setLabel(newLabel: string) {
-		this.label = newLabel;
+		this.name = newLabel;
 	}
 
 	getChildren(): ProblemsItem[] {
@@ -138,7 +138,7 @@ export class ProblemsItem extends vscode.TreeItem {
 
 	toJSON(): any {
 		return {
-			label: this.label,
+			label: this.name,
 			url: this.url,
 			folder: this.folder,
 			collapsed: this.collapsed,
@@ -167,9 +167,9 @@ export class ProblemsItem extends vscode.TreeItem {
 	}
 
 	getFolderOrCreate(folderName: string): ProblemsItem {
-		console.log(this.label);
+		console.log(this.name);
 		if (!this.children) this.children = [];
-		let folder = this.children.find(c => c.folder && c.label === folderName);
+		let folder = this.children.find(c => c.folder && c.name === folderName);
 		if (!folder) {
 			folder = new ProblemsItem(folderName, this, undefined, true);
 			this.push(folder);
@@ -180,7 +180,7 @@ export class ProblemsItem extends vscode.TreeItem {
 	isLessThan(other: ProblemsItem): boolean {
 		if (this.folder && !other.folder) return true;
 		if (!this.folder && other.folder) return false;
-		return (this.label < other.label);
+		return (this.name < other.name);
 	}
 
 	push(item: ProblemsItem) {

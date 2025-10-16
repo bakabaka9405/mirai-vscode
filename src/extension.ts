@@ -110,8 +110,17 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// CaseView
 	const caseViewProvider = new CaseViewProvider();
-	caseView = vscode.window.createTreeView('caseView', { treeDataProvider: caseViewProvider });
 	context.subscriptions.push(vscode.window.registerTreeDataProvider('caseView', caseViewProvider));
+	caseView = vscode.window.createTreeView('caseView', { treeDataProvider: caseViewProvider });
+
+	caseView.onDidChangeCheckboxState((e) => {
+		for (let element of e.items) {
+			const item = element[0];
+			const state = element[1];
+			item.enabled = state === vscode.TreeItemCheckboxState.Checked;
+		}
+	});
+
 	registerCommand('caseView.setting', () => {
 		vscode.commands.executeCommand('workbench.action.openSettings', '@ext:bakabaka9405.mirai-vscode');
 	});
@@ -398,7 +407,7 @@ export function activate(context: vscode.ExtensionContext) {
 		if (!currentTestPreset) {
 			vscode.window.showErrorMessage("未选择编译预设");
 			return;
-		}	
+		}
 		let items = [currentTestPreset?.std ? `不改变（${currentTestPreset.std}）` : "不改变", "c++98", "c++11", "c++14", "c++17", "c++20", "c++23", "c++26"];
 		let selected = await vscode.window.showQuickPick(items, {
 			placeHolder: items[0]

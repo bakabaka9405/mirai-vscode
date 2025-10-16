@@ -305,11 +305,10 @@ export async function doTest(preset: TestPreset, testCases: CaseNode[], caseView
 			//await preheat(preset.getExecutableFile(sourceFile), []);
 			// if (message !== "No change") await sleep(500);
 			for (let c of testCases) {
-				if (token.isCancellationRequested) {
-					c.iconPath = undefined;
-				}
+				c.description = "";
+				c.iconPath = undefined;
 				caseView.reveal(c);
-				await doSingleTestImpl(preset, sourceFile, basePath, outputPath, c, token);
+				if (c.enabled) await doSingleTestImpl(preset, sourceFile, basePath, outputPath, c, token);
 				caseViewProvider.refresh(c);
 				progress.report({ increment: 100 / testCases.length });
 			}

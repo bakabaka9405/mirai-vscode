@@ -26,9 +26,6 @@ export class Editor implements vscode.WebviewViewProvider {
 		});
 		const load_listener = this.webviewView.webview.onDidReceiveMessage((e: { command: string, data: string }) => {
 			if (e.command === 'load') {
-				if (this._readOnly) {
-					this.webviewView?.webview.postMessage({ command: 'setReadOnly', data: "true" });
-				}
 				this._onLoad.fire();
 				load_listener.dispose();
 			}
@@ -71,7 +68,10 @@ export class Editor implements vscode.WebviewViewProvider {
 			</head>
 			<body onload="notifyLoad()">
 				<div id="editor"></div>
-				<script>const MonacoBaseUri = "${MonacoBaseUri}";</script>
+				<script>
+					const MonacoBaseUri = "${MonacoBaseUri}";
+					const InitialReadOnly = "${this._readOnly}";
+				</script>
 				<script src="${scriptUri}"></script>
 			</body>
 		</html>`;

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import { getConfig } from './config';
 export class CaseViewProvider implements vscode.TreeDataProvider<CaseNode> {
 	private _onDidChangeTreeData: vscode.EventEmitter<CaseNode | undefined | void> = new vscode.EventEmitter<CaseNode | undefined | void>();
 	readonly onDidChangeTreeData: vscode.Event<CaseNode | undefined | void> = this._onDidChangeTreeData.event;
@@ -59,12 +60,12 @@ export class CaseViewProvider implements vscode.TreeDataProvider<CaseNode> {
 	}
 
 	public async onBtnRenameCaseClicked(element: CaseNode) {
-		let label = await vscode.window.showInputBox({
+		let name = await vscode.window.showInputBox({
 			placeHolder: "New name",
-			value: element.label
+			value: element.name
 		});
-		if (label) {
-			element.setLabel(label);
+		if (name) {
+			element.setLabel(name);
 			this.refresh();
 		}
 	}
@@ -88,12 +89,22 @@ export class CaseViewProvider implements vscode.TreeDataProvider<CaseNode> {
 				files.forEach((file) => {
 					const inputPath = file.fsPath;
 					const expectedOutputSuffix = [".ans", ".out", ".std"];
+					const externalLengthLimit = getConfig<number>("external_case_length_limit") || 1048576;
 					for (let suffix of expectedOutputSuffix) {
 						const expectedOutputPath = file.fsPath.replace(/\.in$/, suffix);
 						if (fs.existsSync(expectedOutputPath)) {
 							const input = fs.readFileSync(inputPath, 'utf-8');
 							const expectedOutput = fs.readFileSync(expectedOutputPath, 'utf-8');
-							this.cases?.data.push(new CaseNode(path.basename(file.fsPath, '.in'), vscode.TreeItemCollapsibleState.None, undefined, input, "", expectedOutput));
+							if (input.length + expectedOutput.length > externalLengthLimit) {
+								this.cases?.data.push(new CaseNode(path.basename(file.fsPath, '.in'),
+									vscode.TreeItemCollapsibleState.None,
+									true, true, inputPath, "", expectedOutputPath));
+							}
+							else {
+								this.cases?.data.push(new CaseNode(path.basename(file.fsPath, '.in'),
+									vscode.TreeItemCollapsibleState.None,
+									true, false, input, "", expectedOutput));
+							}
 							count += 1;
 							break;
 						}
@@ -133,42 +144,86 @@ export class CaseList {
 
 export class CaseNode extends vscode.TreeItem {
 	parent: vscode.ProviderResult<CaseNode>;
+	private _input: string = "";
+	public output: string = "";
+	private _expectedOutput: string = "";
 	constructor(
-		public label: string,
+		public name: string,
 		public readonly collapsibleState: vscode.TreeItemCollapsibleState,
-		public readonly command?: vscode.Command,
-		public input: string = "",
-		public output: string = "",
-		public expectedOutput: string = "",
+		public enabled: boolean = true,
+		public external: boolean = false,
+		input: string = "",
+		output: string = "",
+		expectedOutput: string = ""
 	) {
-		super(label, collapsibleState);
+		super("", collapsibleState);
+
+		this._input = input;
+		this.output = output;
+		this._expectedOutput = expectedOutput;
+		this.checkboxState = enabled ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked;
 
 		this.command = {
 			command: 'caseView.switchCase',
 			title: '切换样例',
 			arguments: [this]
 		};
+
+		this.setLabel(name);
 	}
 
-	public setLabel(label: string) {
-		this.label = label;
+	public get input(): string {
+		if (!this.external) return this._input;
+		return fs.readFileSync(this._input, 'utf-8');
+	}
+
+	public set input(input: string) {
+		if (!this.external) this._input = input;
+		else if (fs.existsSync(this._input)) fs.writeFileSync(this._input, input, 'utf-8');
+	}
+
+	public get expectedOutput(): string {
+		if (!this.external) return this._expectedOutput;
+		return fs.readFileSync(this._expectedOutput, 'utf-8');
+	}
+
+	public set expectedOutput(expectedOutput: string) {
+		if (!this.external) this._expectedOutput = expectedOutput;
+		else if (fs.existsSync(this._expectedOutput)) fs.writeFileSync(this._expectedOutput, expectedOutput, 'utf-8');
+	}
+
+	public setLabel(name: string) {
+		this.name = name;
+		if (this.external) {
+			this.label = {
+				label: "(external) " + name,
+				highlights: [[0, 10]]
+			};
+		}
+		else {
+			this.label = name;
+		}
 	}
 
 	contextValue = "case";
 
 	toJSON() {
 		return {
-			label: this.label,
-			input: this.input,
-			output: this.output,
-			expectedOutput: this.expectedOutput
+			name: this.name,
+			enabled: this.enabled,
+			external: this.external,
+			input: this._input,
+			expectedOutput: this._expectedOutput
 		}
 	}
 
 	fromJSON(json: any) {
-		this.label = json.label;
-		this.input = json.input;
-		this.output = json.output;
-		this.expectedOutput = json.expectedOutput;
+		this.external = json.external || false;
+		this.enabled = json.enabled || false;
+		this._input = json.input || "";
+		this.output = "";
+		this._expectedOutput = json.expectedOutput || "";
+		this.setLabel(json.name || "undefined");
+		this.checkboxState = this.enabled ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked;
 	}
 }

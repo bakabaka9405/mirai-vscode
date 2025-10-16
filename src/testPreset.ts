@@ -16,12 +16,8 @@ export class TestPreset {
 
 
 	public getExecutableFile(file: string, basePath: string, outputPath: string): string {
-		//console.log(file, basePath, outputPath)
 		let ext = path.extname(file);
 		let relativePath = path.relative(basePath, file);
-		//console.log(relativePath)
-		// let res = path.join(outputPath, path.dirname(relativePath), path.basename(relativePath, ext) + ".exe");
-		//console.log(res);
 		return path.join(outputPath, path.dirname(relativePath), path.basename(relativePath, ext) + ".exe");
 	}
 
