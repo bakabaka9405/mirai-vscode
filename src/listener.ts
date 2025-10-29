@@ -19,7 +19,7 @@ export function startListen(problemsExplorerProvider: ProblemsExplorerProvider) 
 		let cnt = 0;
 		let p = new ProblemsItem(data.name, undefined, data.url);
 		p.cases!.data = data.tests.map((c: any) => {
-			return new CaseNode("Case " + (++cnt), vscode.TreeItemCollapsibleState.None, undefined, c.input, "", c.output);
+			return new CaseNode("Case " + (++cnt), vscode.TreeItemCollapsibleState.None, true, false, c.input, "", c.output);
 		});
 
 		problemsExplorerProvider.problemsRoot.getFolderOrCreate(data.group).push(p);
