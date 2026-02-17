@@ -1,0 +1,1 @@
+export { StatusBarManager } from './StatusBarManager';

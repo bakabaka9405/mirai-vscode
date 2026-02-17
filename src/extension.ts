@@ -1,512 +1,202 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { CaseViewProvider, CaseNode, CaseList } from './caseView'
-import { ProblemsExplorerProvider, ProblemsItem } from './problemsExplorer'
-import { loadProblems, saveProblems } from './problemPersistence'
-import { doTest, doSingleTest, compileAndRun, doDebug, clearCompileCache } from './codeRunner'
-import { startListen } from './listener';
-import { Editor } from './editor';
-import { TestPreset } from './testPreset';
-import { getConfig, onDidConfigChanged, testPresets } from "./config";
-import { generateAllCompileCommandJson } from "./compileCommandsGenerator"
 
-let problemsExplorerView: vscode.TreeView<ProblemsItem>;
-let caseView: vscode.TreeView<CaseNode>;
+// Core
+import { Problem } from './core/models';
 
-let currentTestPreset: TestPreset | undefined;
+// Services
+import { 
+    ConfigService, 
+    CompilerService, 
+    PersistenceService, 
+    ListenerService 
+} from './services';
 
-let overridingStd: string | undefined;
-let overridingOptimizaion: string | undefined;
-let overridingTimeLimit: number | undefined;
+// Providers
+import { 
+    ProblemsTreeProvider, 
+    ProblemTreeItem,
+    CaseTreeProvider, 
+    EditorViewProvider 
+} from './providers';
 
-function packTestPreset(isDebugging: boolean = false): TestPreset | undefined {
-	if (!currentTestPreset) return undefined;
-	let preset: TestPreset = TestPreset.fromObject(currentTestPreset);
-	if (overridingStd) preset.std = overridingStd;
-	if (overridingOptimizaion) preset.optimization = overridingOptimizaion;
-	if (overridingTimeLimit !== undefined) preset.timeoutSec = overridingTimeLimit;
-	if (isDebugging) {
-		preset.additionalArgs.push("-gdwarf-4");
-		preset.optimization = "O0";
-	}
-	return preset;
+// State & UI
+import { StateManager } from './state';
+import { StatusBarManager } from './ui';
+
+// Commands
+import { CommandRegistry } from './commands';
+
+/**
+ * 扩展激活入口
+ */
+export function activate(context: vscode.ExtensionContext): void {
+    // 初始化服务（单例）
+    const config = ConfigService.getInstance();
+    const compiler = CompilerService.getInstance();
+    const persistence = PersistenceService.getInstance();
+    const listener = ListenerService.getInstance();
+    const state = StateManager.getInstance();
+
+    // 加载试题数据
+    const problemsRoot = persistence.load();
+
+    // 初始化 Providers
+    const problemsProvider = new ProblemsTreeProvider(problemsRoot);
+    const caseProvider = new CaseTreeProvider();
+    const inputEditor = new EditorViewProvider(context);
+    const outputEditor = new EditorViewProvider(context, true);
+    const expectedOutputEditor = new EditorViewProvider(context);
+
+    // 注册树视图
+    const problemsTreeView = vscode.window.createTreeView('problemsExplorer', {
+        treeDataProvider: problemsProvider,
+        dragAndDropController: problemsProvider
+    });
+
+    const caseTreeView = vscode.window.createTreeView('caseView', {
+        treeDataProvider: caseProvider
+    });
+
+    // 注册 Webview Providers
+    context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider('inputView', inputEditor, 
+            { webviewOptions: { retainContextWhenHidden: true } }),
+        vscode.window.registerWebviewViewProvider('outputView', outputEditor, 
+            { webviewOptions: { retainContextWhenHidden: true } }),
+        vscode.window.registerWebviewViewProvider('expectedOutputView', expectedOutputEditor, 
+            { webviewOptions: { retainContextWhenHidden: true } })
+    );
+
+    // 注册命令
+    const commands = new CommandRegistry(
+        context,
+        problemsProvider,
+        caseProvider,
+        inputEditor,
+        outputEditor,
+        expectedOutputEditor
+    );
+    commands.registerAll();
+
+    // 状态栏
+    const statusBar = new StatusBarManager(context);
+
+    // 树视图事件
+    problemsTreeView.onDidExpandElement(e => {
+        (e.element as ProblemTreeItem).problem.collapsed = false;
+    });
+    problemsTreeView.onDidCollapseElement(e => {
+        (e.element as ProblemTreeItem).problem.collapsed = true;
+    });
+
+    caseTreeView.onDidChangeCheckboxState(e => {
+        for (const [item, checkState] of e.items) {
+            (item as any).testCase.enabled = checkState === vscode.TreeItemCheckboxState.Checked;
+        }
+    });
+
+    // 主题变更
+    vscode.window.onDidChangeActiveColorTheme(() => {
+        inputEditor.updateTheme();
+        outputEditor.updateTheme();
+        expectedOutputEditor.updateTheme();
+    });
+
+    // 文件监听（用于 compile_commands.json）
+    const watcher = vscode.workspace.createFileSystemWatcher('**/*.cpp', false, true, false);
+    watcher.onDidCreate(() => updateCompileCommands(state, config));
+    watcher.onDidDelete(() => updateCompileCommands(state, config));
+
+    // 配置变更
+    config.onDidChange(() => {
+        updateCompileCommands(state, config);
+    });
+
+    state.onPresetChanged(() => {
+        updateCompileCommands(state, config);
+        vscode.commands.executeCommand('clangd.restart');
+    });
+
+    state.onOverrideChanged(() => {
+        updateCompileCommands(state, config);
+        compiler.clearCache();
+    });
+
+    // 启动 HTTP 监听
+    listener.onProblemReceived(problem => {
+        const group = (problem as any).group || 'Default';
+        problemsProvider.root.getFolderOrCreate(group).push(problem);
+        problemsProvider.refresh();
+    });
+    listener.start();
+
+    // 自动保存
+    persistence.startAutoSave(problemsProvider.root);
+
+    // 注册 disposables
+    context.subscriptions.push(
+        problemsTreeView,
+        caseTreeView,
+        watcher,
+        { dispose: () => persistence.stopAutoSave() },
+        { dispose: () => listener.stop() },
+        { dispose: () => statusBar.dispose() }
+    );
 }
 
-let _onDidTestPresetChanged = new vscode.EventEmitter<TestPreset | undefined>();
-export const onDidTestPresetChanged = _onDidTestPresetChanged.event;
+/**
+ * 更新 compile_commands.json
+ */
+function updateCompileCommands(state: StateManager, config: ConfigService): void {
+    if (!config.get<boolean>('generate_compile_commands')) { return; }
+    
+    const preset = state.getEffectivePreset();
+    if (!preset) { return; }
 
-let _onCompileCommandsNeedUpdate = new vscode.EventEmitter<void>();
-export const onCompileCommandsNeedUpdate = _onCompileCommandsNeedUpdate.event;
+    const workspace = config.workspacePath;
+    if (!workspace) { return; }
 
-export function activate(context: vscode.ExtensionContext) {
-	function registerCommand(command: string, callback: (...args: any[]) => any, thisArg?: any): void {
-		context.subscriptions.push(vscode.commands.registerCommand(command, callback, thisArg));
-	}
-	// ProblemsExplorer
-	const problemsExplorerProvider = new ProblemsExplorerProvider();
-	context.subscriptions.push(vscode.window.registerTreeDataProvider('problemsExplorer', problemsExplorerProvider));
-	problemsExplorerView = vscode.window.createTreeView('problemsExplorer', {
-		treeDataProvider: problemsExplorerProvider,
-		dragAndDropController: problemsExplorerProvider,
-	});
-	context.subscriptions.push(problemsExplorerView);
-	problemsExplorerView.onDidExpandElement(e => {
-		e.element.collapsed = false;
-	});
-	problemsExplorerView.onDidCollapseElement(e => {
-		e.element.collapsed = true;
-	});
-	registerCommand('problemsExplorer.addProblem', (element?: ProblemsItem) => {
-		problemsExplorerProvider.onBtnAddProblemClicked(element || problemsExplorerProvider.problemsRoot);
-	});
-	registerCommand('problemsExplorer.addFolder', () => {
-		problemsExplorerProvider.onBtnAddFolderClicked(problemsExplorerProvider.problemsRoot);
-	});
-	registerCommand('problemsExplorer.addFolderInline', (element?: ProblemsItem) => {
-		problemsExplorerProvider.onBtnAddFolderClicked(element || problemsExplorerProvider.problemsRoot);
-	});
-	registerCommand('problemsExplorer.addProblemFromFolder', () => { });
-	registerCommand('problemsExplorer.renameProblemOrFolder', (element: ProblemsItem) => {
-		problemsExplorerProvider.onBtnRenameProblemOrFolderClicked(element);
-	});
-	registerCommand('problemsExplorer.deleteProblem', (element: ProblemsItem) => {
-		problemsExplorerProvider.onBtnDeleteProblemClicked(element);
-	});
-	registerCommand('problemsExplorer.openProblemUrl', (element: ProblemsItem) => {
-		if (element.url) {
-			vscode.env.openExternal(vscode.Uri.parse(element.url));
-		}
-		else {
-			vscode.window.showErrorMessage("找不到该题目的链接");
-		}
-	});
-	registerCommand('problemsExplorer.copyProblemUrl', (element: ProblemsItem) => {
-		if (element.url) {
-			vscode.env.clipboard.writeText(element.url);
-			vscode.window.showInformationMessage("已复制");
-		}
-		else {
-			vscode.window.showErrorMessage("找不到该题目的链接");
-		}
-	});
-	registerCommand('problemsExplorer.openProblemCode', (element: ProblemsItem) => {
-		if (!vscode.workspace.workspaceFolders) {
-			vscode.window.showErrorMessage("未打开工作区");
-			return;
-		}
-		let file = vscode.workspace.workspaceFolders[0].uri.fsPath;
-		// console.log("element:", element);
-		file = path.join(file, getConfig<string>("src_base_dir") || "", element.GetPath() + ".cpp");
-		fs.mkdirSync(path.dirname(file), { recursive: true });
-		if (!fs.existsSync(file)) {
-			fs.writeFileSync(file, "");
-		}
-		vscode.window.showTextDocument(vscode.Uri.file(file));
-	});
-	registerCommand('problemsExplorer.switchProblem', async (element: ProblemsItem) => {
-		await saveCurrentCaseContent();
-		caseViewProvider.switchCaseGroup(element.cases!);
-		showCurrentCaseContent();
-	});
+    const srcBase = config.srcBasePath;
+    const buildBase = config.buildBasePath;
+    const outputDir = path.join(workspace, config.get<string>('compile_commands_path') || '');
 
-	// CaseView
-	const caseViewProvider = new CaseViewProvider();
-	context.subscriptions.push(vscode.window.registerTreeDataProvider('caseView', caseViewProvider));
-	caseView = vscode.window.createTreeView('caseView', { treeDataProvider: caseViewProvider });
-
-	caseView.onDidChangeCheckboxState((e) => {
-		for (let element of e.items) {
-			const item = element[0];
-			const state = element[1];
-			item.enabled = state === vscode.TreeItemCheckboxState.Checked;
-		}
-	});
-
-	registerCommand('caseView.setting', () => {
-		vscode.commands.executeCommand('workbench.action.openSettings', '@ext:bakabaka9405.mirai-vscode');
-	});
-	registerCommand('caseView.addCase', () => {
-		caseViewProvider.onBtnAddCaseClicked();
-	});
-	registerCommand('caseView.searchCasesInFolder', async () => {
-		caseViewProvider.onBtnSearchCasesInFolderClicked();
-	});
-	registerCommand('caseView.deleteCase', (element: CaseNode) => {
-		caseViewProvider.onBtnDeleteCaseClicked(element);
-	});
-	registerCommand('caseView.renameCase', (element: CaseNode) => {
-		caseViewProvider.onBtnRenameCaseClicked(element);
-	});
-	registerCommand('caseView.clearCompileCache', () => {
-		clearCompileCache();
-		vscode.window.showInformationMessage("已清除");
-	});
-	registerCommand('explorer.compileAndRun', async () => {
-		await vscode.workspace.saveAll(false);
-		if (!currentTestPreset) {
-			await vscode.commands.executeCommand("mirai-vscode.onBtnToggleTestPresetClicked");
-			if (!currentTestPreset) {
-				vscode.window.showErrorMessage("未选择编译测试预设");
-				return;
-			}
-		}
-		compileAndRun(packTestPreset()!);
-	});
-	registerCommand('explorer.compileAndRunForceCompile', async () => {
-		await vscode.workspace.saveAll(false);
-		if (!currentTestPreset) {
-			await vscode.commands.executeCommand("mirai-vscode.onBtnToggleTestPresetClicked");
-			if (!currentTestPreset) {
-				vscode.window.showErrorMessage("未选择编译测试预设");
-				return;
-			}
-		}
-		compileAndRun(packTestPreset()!, true);
-	});
-	registerCommand('caseView.testAllCase', async () => {
-		inputEditor.reveal();
-		await vscode.workspace.saveAll(false);
-		if (!currentTestPreset) {
-			await vscode.commands.executeCommand("mirai-vscode.onBtnToggleTestPresetClicked");
-			if (!currentTestPreset) {
-				vscode.window.showErrorMessage("未选择编译测试预设");
-				return;
-			}
-		}
-		await doTest(packTestPreset()!, caseViewProvider.getChildren(), caseViewProvider, caseView);
-		showCurrentCaseContent();
-	});
-	registerCommand('caseView.testAllCaseForceCompile', async () => {
-		inputEditor.reveal();
-		await vscode.workspace.saveAll(false);
-		if (!currentTestPreset) {
-			await vscode.commands.executeCommand("mirai-vscode.onBtnToggleTestPresetClicked");
-			if (!currentTestPreset) {
-				vscode.window.showErrorMessage("未选择编译测试预设");
-				return;
-			}
-		}
-		await doTest(packTestPreset()!, caseViewProvider.getChildren(), caseViewProvider, caseView, true);
-		showCurrentCaseContent();
-	});
-	registerCommand('caseView.testSingleCase', async (element: CaseNode) => {
-		await vscode.workspace.saveAll(false);
-		caseView.reveal(element);
-		element.iconPath = undefined;
-		caseViewProvider.refresh(element);
-		if (!currentTestPreset) {
-			await vscode.commands.executeCommand("mirai-vscode.onBtnToggleTestPresetClicked");
-			if (!currentTestPreset) {
-				vscode.window.showErrorMessage("未选择编译测试预设");
-				return;
-			}
-		}
-		await doSingleTest(packTestPreset()!, element);
-		caseViewProvider.refresh(element);
-		showCurrentCaseContent();
-	});
-	registerCommand('startDebugging', async () => {
-		await vscode.workspace.saveAll(false);
-		if (!currentTestPreset) {
-			await vscode.commands.executeCommand("mirai-vscode.onBtnToggleTestPresetClicked");
-			if (!currentTestPreset) {
-				vscode.window.showErrorMessage("未选择编译测试预设");
-				return;
-			}
-		}
-		await doDebug(packTestPreset(true)!);
-	});
-	registerCommand('caseView.debugCase', async (element: CaseNode) => {
-		await vscode.workspace.saveAll(false);
-		if (!currentTestPreset) {
-			await vscode.commands.executeCommand("mirai-vscode.onBtnToggleTestPresetClicked");
-			if (!currentTestPreset) {
-				vscode.window.showErrorMessage("未选择编译测试预设");
-				return;
-			}
-		}
-		await doDebug(packTestPreset(true)!, element);
-	});
-
-	async function saveCurrentCaseContent() {
-		if (inputEditor && outputEditor && expectedOutputEditor && caseViewProvider.current_case) {
-			if (caseViewProvider.current_case) {
-				const [inputContent, outputContent, expectedOutputContent] = await Promise.all([
-					inputEditor.getText(),
-					outputEditor.getText(),
-					expectedOutputEditor.getText()
-				]);
-				caseViewProvider.current_case.input = inputContent;
-				caseViewProvider.current_case.output = outputContent;
-				caseViewProvider.current_case.expectedOutput = expectedOutputContent;
-			}
-		}
-	}
-
-	function showCurrentCaseContent() {
-		if (caseViewProvider.current_case) {
-			inputEditor.setText(caseViewProvider.current_case.input);
-			outputEditor.setText(caseViewProvider.current_case.output);
-			expectedOutputEditor.setText(caseViewProvider.current_case.expectedOutput);
-		}
-		else {
-			inputEditor.setText("");
-			outputEditor.setText("");
-			expectedOutputEditor.setText("");
-		}
-	}
-
-	registerCommand('caseView.switchCase', async (element: CaseNode | undefined) => {
-		await saveCurrentCaseContent();
-		caseViewProvider.current_case = element;
-		showCurrentCaseContent();
-		inputEditor.reveal();
-	});
-
-	const inputEditor = new Editor(context);
-	context.subscriptions.push(vscode.window.registerWebviewViewProvider("inputView", inputEditor
-		, { webviewOptions: { retainContextWhenHidden: true } }));
-	inputEditor.onDidChange((data) => {
-		if (caseViewProvider.current_case) {
-			caseViewProvider.current_case.input = data;
-		}
-	});
-
-	inputEditor.onLoad(() => {
-		if (caseViewProvider.current_case) {
-			inputEditor.setText(caseViewProvider.current_case.input);
-		}
-	});
-
-	const outputEditor = new Editor(context, true);
-	context.subscriptions.push(vscode.window.registerWebviewViewProvider("outputView", outputEditor
-		, { webviewOptions: { retainContextWhenHidden: true } }));
-	outputEditor.onDidChange((data) => {
-		if (caseViewProvider.current_case) {
-			caseViewProvider.current_case.output = data;
-		}
-	});
-
-	outputEditor.onLoad(() => {
-		if (caseViewProvider.current_case) {
-			outputEditor.setText(caseViewProvider.current_case.output);
-		}
-	});
-
-	registerCommand('outputView.copyOutput', async () => {
-		const content = await outputEditor.getText();
-		await vscode.env.clipboard.writeText(content);
-		vscode.window.showInformationMessage("已复制");
-	});
-
-	//expectedOutputView
-	const expectedOutputEditor = new Editor(context);
-	context.subscriptions.push(vscode.window.registerWebviewViewProvider("expectedOutputView", expectedOutputEditor
-		, { webviewOptions: { retainContextWhenHidden: true } }));
-	expectedOutputEditor.onDidChange((data) => {
-		if (caseViewProvider.current_case) {
-			caseViewProvider.current_case.expectedOutput = data;
-		}
-	});
-
-	expectedOutputEditor.onLoad(() => {
-		if (caseViewProvider.current_case) {
-			expectedOutputEditor.setText(caseViewProvider.current_case.expectedOutput);
-		}
-	});
-
-	registerCommand('expectedOutputView.contrast', async () => {
-		const os = require('os');
-		let file1 = path.join(os.tmpdir(), 'contrast_lt.txt');
-		let file2 = path.join(os.tmpdir(), 'contrast_rt.txt');
-
-		const [output, expectedOutput] = await Promise.all([outputEditor.getText(), expectedOutputEditor.getText()]);
-
-		fs.writeFileSync(file1, output);
-		fs.writeFileSync(file2, expectedOutput);
-
-		let uri1 = vscode.Uri.file(file1);
-		let uri2 = vscode.Uri.file(file2);
-
-		vscode.commands.executeCommand('vscode.diff', uri1, uri2, "输出↔期望输出");
-	});
-
-	vscode.window.onDidChangeActiveColorTheme((e) => {
-		inputEditor.updateTheme();
-		outputEditor.updateTheme();
-		expectedOutputEditor.updateTheme();
-	});
-
-	// StatusBar
-
-	let statusBarTestPreset = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
-	statusBarTestPreset.text = "编译测试预设";
-	statusBarTestPreset.tooltip = "切换编译测试预设";
-	statusBarTestPreset.command = "mirai-vscode.onBtnToggleTestPresetClicked";
-	statusBarTestPreset.show();
-	context.subscriptions.push(statusBarTestPreset);
-
-	registerCommand('mirai-vscode.onBtnToggleTestPresetClicked', async () => {
-		let items: { label: string, description: string, index: number }[] = testPresets.map((preset, index) => {
-			return {
-				label: preset.label,
-				description: preset.description,
-				index: index,
-			}
-		});
-		if (items.length == 0) {
-			vscode.window.showErrorMessage("没有预设");
-			return;
-		}
-		let selected = await vscode.window.showQuickPick(items, {
-			placeHolder: items[0].label
-		});
-
-		if (selected) {
-			currentTestPreset = testPresets[selected.index];
-			statusBarTestPreset.text = currentTestPreset.label;
-			clearCompileCache();
-			_onDidTestPresetChanged.fire(currentTestPreset);
-		}
-	});
-
-	onDidConfigChanged(() => {
-		if (currentTestPreset) {
-			currentTestPreset = undefined;
-			statusBarTestPreset.text = "编译测试预设";
-			_onDidTestPresetChanged.fire(undefined);
-		}
-		_onCompileCommandsNeedUpdate.fire();
-	});
-
-	onDidTestPresetChanged((preset) => {
-		_onCompileCommandsNeedUpdate.fire();
-		vscode.commands.executeCommand('clangd.restart');
-		if (!overridingStd) statusBarOverridingStd.text = preset?.std ? `不改变（${preset.std}）` : "不改变（默认）";
-		if (!overridingOptimizaion) statusBarOverridingOptimization.text = preset?.optimization ? `不改变（${preset.optimization}）` : "不改变（默认）";
-		if (overridingTimeLimit === undefined) {
-			statusBarOverridingTimeLimit.text = preset?.timeoutSec ? `不改变（${preset.timeoutSec}秒）` : "不改变（无限制）";
-		}
-	});
-
-	onCompileCommandsNeedUpdate(() => {
-		if (currentTestPreset && getConfig<string>("generate_compile_commands")) {
-			const compileCommands = generateAllCompileCommandJson(
-				packTestPreset()!, path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, getConfig<string>("src_base_dir") || ""),
-				path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, getConfig<string>("build_base_dir") || ""));
-			fs.writeFileSync(path.join(vscode.workspace.workspaceFolders![0].uri.fsPath,
-				getConfig<string>("compile_commands_path") || "", "compile_commands.json"),
-				compileCommands);
-		}
-	});
-
-	let statusBarOverridingStd = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
-	statusBarOverridingStd.text = "不改变";
-	statusBarOverridingStd.tooltip = "重载语言标准";
-	statusBarOverridingStd.command = "mirai-vscode.onBtnToggleOverridingStdClicked";
-	statusBarOverridingStd.show();
-	context.subscriptions.push(statusBarOverridingStd);
-
-	registerCommand('mirai-vscode.onBtnToggleOverridingStdClicked', async () => {
-		if (!currentTestPreset) {
-			vscode.window.showErrorMessage("未选择编译预设");
-			return;
-		}
-		let items = [currentTestPreset?.std ? `不改变（${currentTestPreset.std}）` : "不改变", "c++98", "c++11", "c++14", "c++17", "c++20", "c++23", "c++26"];
-		let selected = await vscode.window.showQuickPick(items, {
-			placeHolder: items[0]
-		});
-
-		if (selected) {
-			if (items.findIndex(v => v == selected) == 0) overridingStd = undefined;
-			else overridingStd = selected;
-			statusBarOverridingStd.text = selected;
-			_onCompileCommandsNeedUpdate.fire();
-			clearCompileCache();
-			vscode.commands.executeCommand('clangd.restart');
-		}
-	});
-
-	let statusBarOverridingOptimization = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
-	statusBarOverridingOptimization.text = "不改变";
-	statusBarOverridingOptimization.tooltip = "重载优化选项";
-	statusBarOverridingOptimization.command = "mirai-vscode.onBtnToggleOverridingOptimizationClicked";
-	statusBarOverridingOptimization.show();
-	context.subscriptions.push(statusBarOverridingOptimization);
-
-	registerCommand('mirai-vscode.onBtnToggleOverridingOptimizationClicked', async () => {
-		if (!currentTestPreset) {
-			vscode.window.showErrorMessage("未选择编译预设");
-			return;
-		}
-		let items = [`不改变（${currentTestPreset?.optimization || "默认"}）`, "默认", "O0", "O1", "O2", "O3", "Ofast", "Og", "Os"];
-		let selected = await vscode.window.showQuickPick(items.map((v, i) => ({ label: v, index: i })), {
-			placeHolder: items[0]
-		});
-
-		if (selected) {
-			if (selected.index == 0) overridingOptimizaion = undefined;
-			else if (selected.index == 1) overridingOptimizaion = "";
-			else overridingOptimizaion = selected.label;
-			statusBarOverridingOptimization.text = selected.label;
-			_onCompileCommandsNeedUpdate.fire();
-			clearCompileCache();
-		}
-	});
-
-	let statusBarOverridingTimeLimit = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
-	statusBarOverridingTimeLimit.text = "不改变";
-	statusBarOverridingTimeLimit.tooltip = "重载时间限制";
-	statusBarOverridingTimeLimit.command = "mirai-vscode.onBtnToggleOverridingTimeLimitClicked";
-	statusBarOverridingTimeLimit.show();
-	context.subscriptions.push(statusBarOverridingTimeLimit);
-
-	registerCommand('mirai-vscode.onBtnToggleOverridingTimeLimitClicked', async () => {
-		if (!currentTestPreset) {
-			vscode.window.showErrorMessage("未选择编译预设");
-			return;
-		}
-		let items = [currentTestPreset?.timeoutSec ? `不改变（${currentTestPreset.timeoutSec}秒）` : "不改变", "无限制", "1秒", "2秒", "3秒", "5秒", "10秒", "20秒", "30秒", "60秒"];
-		let selected = await vscode.window.showQuickPick(items.map((v, i) => ({ label: v, index: i })), {
-			placeHolder: items[0]
-		});
-
-		if (selected) {
-			if (selected.index == 0) overridingTimeLimit = undefined;
-			else if (selected.index == 1) overridingTimeLimit = 0;
-			else overridingTimeLimit = parseInt(selected.label.replace("秒", ""));
-			statusBarOverridingTimeLimit.text = selected.label;
-		}
-	});
-	statusBarOverridingTimeLimit.text = "不改变";
-	context.subscriptions.push(statusBarOverridingTimeLimit);
-
-	let watcher = vscode.workspace.createFileSystemWatcher("**/*.cpp", false, true, false);
-	watcher.onDidCreate((e) => {
-		_onCompileCommandsNeedUpdate.fire();
-	});
-	watcher.onDidDelete((e) => {
-		_onCompileCommandsNeedUpdate.fire();
-	});
-	context.subscriptions.push(watcher);
-
-	//load problems
-	let problemsJson = loadProblems();
-	problemsExplorerProvider.problemsRoot = ProblemsItem.fromJSON(problemsJson.problems);
-	problemsExplorerProvider.problemsRoot.folder = true;
-	problemsExplorerProvider.refresh();
-	console.log(problemsExplorerProvider.problemsRoot);
-
-	//save problems
-	let timer = setInterval(() => {
-		saveProblems(problemsExplorerProvider);
-	}, 5000);
-	context.subscriptions.push({ dispose: () => clearInterval(timer) });
-
-	startListen(problemsExplorerProvider);
+    // 生成 compile_commands.json
+    const commands = generateCompileCommands(preset, srcBase, buildBase);
+    
+    fs.mkdirSync(outputDir, { recursive: true });
+    fs.writeFileSync(path.join(outputDir, 'compile_commands.json'), JSON.stringify(commands, null, 2));
 }
 
-export function deactivate() {
+/**
+ * 生成 compile_commands.json 内容
+ */
+function generateCompileCommands(preset: any, srcBase: string, buildBase: string): object[] {
+    const commands: object[] = [];
+    
+    function scanDir(dir: string): void {
+        if (!fs.existsSync(dir)) { return; }
+        
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+            const fullPath = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+                scanDir(fullPath);
+            } else if (entry.name.endsWith('.cpp')) {
+                commands.push({
+                    directory: srcBase,
+                    command: preset.generateCompileCommand(fullPath, srcBase, buildBase),
+                    file: fullPath
+                });
+            }
+        }
+    }
 
+    scanDir(srcBase);
+    return commands;
+}
+
+export function deactivate(): void {
+    // 清理由服务管理
 }
