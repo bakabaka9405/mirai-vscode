@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { TestPreset, Problem, TestCase } from '../core/models';
+import { LanguagePreset, Problem, TestCase } from '../core/models';
+import { LanguageHandlerRegistry } from '../core/handlers';
 import { ConfigService } from '../services';
 
 /**
@@ -10,7 +11,7 @@ export class StateManager {
     private config: ConfigService;
 
     // 当前选中的编译预设
-    private _currentPreset?: TestPreset;
+    private _currentPreset?: LanguagePreset;
     // 当前选中的试题
     private _currentProblem?: Problem;
     // 当前选中的测试样例
@@ -22,7 +23,7 @@ export class StateManager {
     private _overrideTimeLimit?: number;
 
     // 事件发射器
-    private _onPresetChanged = new vscode.EventEmitter<TestPreset | undefined>();
+    private _onPresetChanged = new vscode.EventEmitter<LanguagePreset | undefined>();
     private _onProblemChanged = new vscode.EventEmitter<Problem | undefined>();
     private _onCaseChanged = new vscode.EventEmitter<TestCase | undefined>();
     private _onOverrideChanged = new vscode.EventEmitter<void>();
@@ -52,23 +53,26 @@ export class StateManager {
     }
 
     // 预设相关
-    get currentPreset(): TestPreset | undefined {
+    get currentPreset(): LanguagePreset | undefined {
         return this._currentPreset;
     }
 
-    set currentPreset(preset: TestPreset | undefined) {
+    set currentPreset(preset: LanguagePreset | undefined) {
         this._currentPreset = preset;
         this._onPresetChanged.fire(preset);
     }
 
     /**
      * 获取应用了重载设置的预设
+     * 
+     * @param isDebugging 是否为调试模式
      */
-    getEffectivePreset(isDebugging: boolean = false): TestPreset | undefined {
+    getEffectivePreset(isDebugging: boolean = false): LanguagePreset | undefined {
         if (!this._currentPreset) { return undefined; }
 
         const preset = this._currentPreset.clone();
         
+        // 应用重载设置
         if (this._overrideStd) {
             preset.std = this._overrideStd;
         }
@@ -78,9 +82,21 @@ export class StateManager {
         if (this._overrideTimeLimit !== undefined) {
             preset.timeoutSec = this._overrideTimeLimit;
         }
+
+        // 调试模式：应用语言特定的调试设置
         if (isDebugging) {
-            preset.additionalArgs.push('-gdwarf-4');
-            preset.optimization = 'O0';
+            const registry = LanguageHandlerRegistry.getInstance();
+            const handler = registry.getHandler(preset.languageId);
+            if (handler?.applyDebugMode) {
+                handler.applyDebugMode(preset);
+            } else {
+                // 默认调试设置（C/C++ 风格）
+                if (!preset.additionalArgs) {
+                    preset.additionalArgs = [];
+                }
+                preset.additionalArgs.push('-gdwarf-4');
+                preset.optimization = 'O0';
+            }
         }
 
         return preset;

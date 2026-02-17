@@ -4,7 +4,8 @@ import * as path from 'path';
 import { StateManager } from '../state';
 import { ConfigService, CompilerService, RunnerService } from '../services';
 import { ProblemsTreeProvider, ProblemTreeItem } from '../providers';
-import { TestCase, TestStatus } from '../core/models';
+import { TestCase, TestStatus, LanguagePreset } from '../core/models';
+import { LanguageHandlerRegistry, DebuggerDetector } from '../core/handlers';
 
 /**
  * 命令注册器 - 集中管理所有命令
@@ -15,6 +16,7 @@ export class CommandRegistry {
     private config: ConfigService;
     private compiler: CompilerService;
     private runner: RunnerService;
+    private registry: LanguageHandlerRegistry;
 
     constructor(
         private context: vscode.ExtensionContext,
@@ -28,6 +30,7 @@ export class CommandRegistry {
         this.config = ConfigService.getInstance();
         this.compiler = CompilerService.getInstance();
         this.runner = RunnerService.getInstance();
+        this.registry = this.compiler.getRegistry();
     }
 
     registerAll(): void {
@@ -94,7 +97,9 @@ export class CommandRegistry {
             }
 
             const srcBase = this.config.get<string>('src_base_dir') || '';
-            const filePath = path.join(workspace, srcBase, item.problem.getPath() + '.cpp');
+            // 根据当前预设的语言决定文件扩展名
+            const ext = this.getFileExtensionForLanguage();
+            const filePath = path.join(workspace, srcBase, item.problem.getPath() + ext);
             
             fs.mkdirSync(path.dirname(filePath), { recursive: true });
             if (!fs.existsSync(filePath)) {
@@ -109,6 +114,26 @@ export class CommandRegistry {
             this.caseProvider.switchCases(item.problem.cases);
             this.showCurrentCase();
         });
+    }
+
+    /**
+     * 根据当前预设语言获取文件扩展名
+     */
+    private getFileExtensionForLanguage(): string {
+        const preset = this.state.currentPreset;
+        if (!preset) {
+            return '.cpp'; // 默认 C++
+        }
+
+        const extMap: Record<string, string> = {
+            'cpp': '.cpp',
+            'c': '.c',
+            'python': '.py',
+            'java': '.java',
+            'rust': '.rs'
+        };
+
+        return extMap[preset.languageId] || '.cpp';
     }
 
     private registerCaseCommands(): void {
@@ -210,15 +235,25 @@ export class CommandRegistry {
 
     private registerPresetCommands(): void {
         this.register('mirai-vscode.onBtnToggleTestPresetClicked', async () => {
-            const presets = this.config.testPresets;
+            const srcFile = vscode.window.activeTextEditor?.document.fileName;
+            
+            // 根据当前文件过滤预设
+            let presets = this.config.presets;
+            if (srcFile) {
+                const filteredPresets = this.config.getPresetsForFile(srcFile);
+                if (filteredPresets.length > 0) {
+                    presets = filteredPresets;
+                }
+            }
+
             if (presets.length === 0) {
-                vscode.window.showErrorMessage('没有预设');
+                vscode.window.showErrorMessage('没有可用的预设');
                 return;
             }
 
             const items = presets.map((preset, index) => ({
                 label: preset.label,
-                description: preset.description,
+                description: `[${preset.languageId}] ${preset.description}`,
                 index
             }));
 
@@ -238,11 +273,26 @@ export class CommandRegistry {
                 return;
             }
 
-            const current = this.state.currentPreset.std;
-            const items = [
-                current ? `不改变（${current}）` : '不改变',
-                'c++98', 'c++11', 'c++14', 'c++17', 'c++20', 'c++23', 'c++26'
-            ];
+            // 根据语言显示不同的标准选项
+            const languageId = this.state.currentPreset.languageId;
+            let items: string[];
+
+            if (languageId === 'cpp') {
+                const current = this.state.currentPreset.std;
+                items = [
+                    current ? `不改变（${current}）` : '不改变',
+                    'c++98', 'c++11', 'c++14', 'c++17', 'c++20', 'c++23', 'c++26'
+                ];
+            } else if (languageId === 'c') {
+                const current = this.state.currentPreset.std;
+                items = [
+                    current ? `不改变（${current}）` : '不改变',
+                    'c89', 'c99', 'c11', 'c17', 'c23'
+                ];
+            } else {
+                vscode.window.showInformationMessage('当前语言不支持语言标准设置');
+                return;
+            }
 
             const selected = await vscode.window.showQuickPick(items);
             if (selected) {
@@ -254,6 +304,13 @@ export class CommandRegistry {
         this.register('mirai-vscode.onBtnToggleOverridingOptimizationClicked', async () => {
             if (!this.state.currentPreset) {
                 vscode.window.showErrorMessage('未选择编译预设');
+                return;
+            }
+
+            // 只有编译型语言支持优化级别
+            const languageId = this.state.currentPreset.languageId;
+            if (!['cpp', 'c', 'rust'].includes(languageId)) {
+                vscode.window.showInformationMessage('当前语言不支持优化级别设置');
                 return;
             }
 
@@ -442,9 +499,31 @@ export class CommandRegistry {
             return;
         }
 
-        const execFile = preset.getExecutableFile(srcFile, this.config.srcBasePath, this.config.buildBasePath);
+        // 获取运行命令
+        const handler = this.registry.getHandler(preset.languageId);
+        if (!handler) {
+            vscode.window.showErrorMessage(`不支持的语言: ${preset.languageId}`);
+            return;
+        }
+
+        const runCommand = handler.getRunCommand(
+            srcFile, 
+            preset, 
+            this.config.srcBasePath, 
+            this.config.buildBasePath
+        );
+
         const terminal = vscode.window.createTerminal('mirai-vscode:编译运行');
-        terminal.sendText(`& "${execFile}"`);
+        
+        // 构建终端命令
+        let terminalCommand: string;
+        if (runCommand.args.length > 0) {
+            terminalCommand = `& "${runCommand.command}" ${runCommand.args.map(a => `"${a}"`).join(' ')}`;
+        } else {
+            terminalCommand = `& "${runCommand.command}"`;
+        }
+        
+        terminal.sendText(terminalCommand);
         terminal.show();
     }
 
@@ -462,6 +541,18 @@ export class CommandRegistry {
             return;
         }
 
+        // 检查是否有可用的调试器
+        const handler = this.registry.getHandler(preset.languageId);
+        if (!handler) {
+            vscode.window.showErrorMessage(`不支持的语言: ${preset.languageId}`);
+            return;
+        }
+
+        if (!DebuggerDetector.hasAnyDebugger(preset.languageId)) {
+            await DebuggerDetector.promptInstallDebugger(preset.languageId);
+            return;
+        }
+
         const result = await this.compiler.compile(preset, srcFile);
         if (!result.success) {
             vscode.window.showErrorMessage(`编译失败：${result.message}`, '查看详细信息')
@@ -469,25 +560,41 @@ export class CommandRegistry {
             return;
         }
 
-        const execFile = preset.getExecutableFile(srcFile, this.config.srcBasePath, this.config.buildBasePath);
+        // 获取调试配置
+        const debugConfig = handler.getDebugConfig?.(
+            srcFile,
+            preset,
+            this.config.srcBasePath,
+            this.config.buildBasePath
+        );
+
+        if (!debugConfig) {
+            vscode.window.showErrorMessage('无法获取调试配置');
+            return;
+        }
+
         let tmpFile: string | undefined;
 
+        // 如果有测试用例，写入临时文件作为输入
         if (testCase) {
             const os = require('os');
             tmpFile = path.join(os.tmpdir(), 'mirai-vscode-debug.tmp');
             fs.writeFileSync(tmpFile, testCase.input);
+            debugConfig.stdio = [tmpFile, null, null];
         }
 
         const folder = vscode.workspace.workspaceFolders?.[0];
-        await vscode.debug.startDebugging(folder, {
-            type: 'lldb',
-            name: 'Debug',
-            request: 'launch',
-            program: execFile,
-            args: [],
-            cwd: '${workspaceFolder}',
-            stdio: [testCase ? tmpFile : null, null, null]
-        });
+        
+        // 构建 VS Code 调试配置
+        const { extensionId, ...restConfig } = debugConfig;
+        const vsDebugConfig: vscode.DebugConfiguration = {
+            ...restConfig,
+            name: debugConfig.name || 'Debug',
+            args: debugConfig.args || [],
+            cwd: debugConfig.cwd || '${workspaceFolder}',
+        };
+
+        await vscode.debug.startDebugging(folder, vsDebugConfig);
     }
 
     dispose(): void {

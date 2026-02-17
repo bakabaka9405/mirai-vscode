@@ -15,7 +15,11 @@
 		"Other"
 	],
 	"activationEvents": [
-		"onLanguage:cpp"
+		"onLanguage:cpp",
+		"onLanguage:c",
+		"onLanguage:python",
+		"onLanguage:java",
+		"onLanguage:rust"
 	],
 	"main": "./dist/extension.js",
 	"repository": {
@@ -371,7 +375,7 @@
 				},
 				"mirai-vscode.test_presets": {
 					"type": "array",
-					"description": "编译测试预设",
+					"description": "编译测试预设（向后兼容，建议使用 language_presets）",
 					"items": {
 						"type": "object",
 						"properties": {
@@ -379,22 +383,19 @@
 								"type": "string",
 								"description": "名称"
 							},
+							"languageId": {
+								"type": "string",
+								"description": "语言标识符",
+								"enum": ["cpp", "c", "python", "java", "rust"],
+								"default": "cpp"
+							},
 							"compilerPath": {
 								"type": "string",
 								"description": "编译器路径"
 							},
 							"std": {
 								"type": "string",
-								"description": "语言标准",
-								"enum": [
-									"c++98",
-									"c++11",
-									"c++14",
-									"c++17",
-									"c++20",
-									"c++23",
-									"c++26"
-								]
+								"description": "语言标准"
 							},
 							"optimization": {
 								"type": "string",
@@ -427,9 +428,9 @@
 							},
 							"timeoutSec": {
 								"type": "number",
-								"description": "超时时间(s),默认为 1s",
+								"description": "超时时间(s),默认为 5s",
 								"minimum": 0,
-								"default": 1
+								"default": 5
 							},
 							"memoryLimitMB": {
 								"type": "number",
@@ -439,13 +440,181 @@
 							},
 							"mixStdoutStderr": {
 								"type": "boolean",
-								"description": "把标准错误输出也当作标准输出处理，如果你要使用 Address Sanitizer，启用这个功能。",
+								"description": "把标准错误输出也当作标准输出处理",
 								"default": false
 							},
 							"description": {
 								"type": "string",
 								"description": "描述",
 								"default": ""
+							}
+						}
+					},
+					"default": []
+				},
+				"mirai-vscode.language_presets": {
+					"type": "array",
+					"description": "多语言预设配置",
+					"items": {
+						"type": "object",
+						"required": ["label", "languageId"],
+						"properties": {
+							"label": {
+								"type": "string",
+								"description": "预设名称"
+							},
+							"languageId": {
+								"type": "string",
+								"description": "语言标识符",
+								"enum": ["cpp", "c", "python", "java", "rust"]
+							},
+							"description": {
+								"type": "string",
+								"description": "预设描述",
+								"default": ""
+							},
+							"compilerPath": {
+								"type": "string",
+								"description": "编译器路径（编译型语言）"
+							},
+							"interpreterPath": {
+								"type": "string",
+								"description": "解释器路径（Python）"
+							},
+							"runtimePath": {
+								"type": "string",
+								"description": "运行时路径（Java 的 java 命令）"
+							},
+							"std": {
+								"type": "string",
+								"description": "语言标准（C/C++: c++17, c11 等）"
+							},
+							"optimization": {
+								"type": "string",
+								"description": "优化级别",
+								"enum": ["O0", "O1", "O2", "O3", "Ofast", "Og", "Os"]
+							},
+							"additionalArgs": {
+								"type": "array",
+								"description": "额外编译参数",
+								"items": { "type": "string" },
+								"default": []
+							},
+							"additionalIncludePaths": {
+								"type": "array",
+								"description": "额外包含路径（C/C++）",
+								"items": { "type": "string" },
+								"default": []
+							},
+							"runtimeArgs": {
+								"type": "array",
+								"description": "运行时参数",
+								"items": { "type": "string" },
+								"default": []
+							},
+							"timeoutSec": {
+								"type": "number",
+								"description": "超时时间（秒），0 表示无限制",
+								"minimum": 0,
+								"default": 5
+							},
+							"memoryLimitMB": {
+								"type": "number",
+								"description": "内存限制（MB）",
+								"minimum": 0,
+								"default": 512
+							},
+							"mixStdoutStderr": {
+								"type": "boolean",
+								"description": "合并 stdout 和 stderr",
+								"default": false
+							},
+							"debuggerType": {
+								"type": "string",
+								"description": "调试器类型覆盖（如 lldb, cppdbg, debugpy）"
+							}
+						}
+					},
+					"default": []
+				},
+				"mirai-vscode.custom_languages": {
+					"type": "array",
+					"description": "自定义语言配置",
+					"items": {
+						"type": "object",
+						"required": ["languageId", "displayName", "fileExtensions", "run"],
+						"properties": {
+							"languageId": {
+								"type": "string",
+								"description": "语言标识符（唯一）"
+							},
+							"displayName": {
+								"type": "string",
+								"description": "显示名称"
+							},
+							"fileExtensions": {
+								"type": "array",
+								"description": "支持的文件扩展名（不含点号）",
+								"items": { "type": "string" }
+							},
+							"compile": {
+								"type": "object",
+								"description": "编译配置（可选）",
+								"properties": {
+									"command": {
+										"type": "string",
+										"description": "编译命令"
+									},
+									"args": {
+										"type": "array",
+										"description": "编译参数，支持变量：${srcFile}, ${srcDir}, ${srcName}, ${outputFile}, ${outputDir}, ${workspaceFolder}",
+										"items": { "type": "string" }
+									},
+									"outputExtension": {
+										"type": "string",
+										"description": "输出文件扩展名"
+									}
+								},
+								"required": ["command", "args"]
+							},
+							"run": {
+								"type": "object",
+								"description": "运行配置",
+								"properties": {
+									"command": {
+										"type": "string",
+										"description": "运行命令"
+									},
+									"args": {
+										"type": "array",
+										"description": "运行参数，支持变量替换",
+										"items": { "type": "string" }
+									},
+									"cwd": {
+										"type": "string",
+										"description": "工作目录"
+									}
+								},
+								"required": ["command", "args"]
+							},
+							"debug": {
+								"type": "object",
+								"description": "调试配置（可选）",
+								"properties": {
+									"type": {
+										"type": "string",
+										"description": "调试器类型"
+									},
+									"extensionId": {
+										"type": "string",
+										"description": "所需扩展 ID"
+									},
+									"config": {
+										"type": "object",
+										"description": "额外调试配置"
+									}
+								},
+								"required": ["type", "extensionId"]
 							}
 						}
 					},
@@ -457,22 +626,22 @@
 			{
 				"command": "caseView.testAllCase",
 				"key": "f10",
-				"when": "resourceExtname==.cpp"
+				"when": "resourceExtname=~/.cpp|.c|.py|.java|.rs/"
 			},
 			{
 				"command": "explorer.compileAndRun",
 				"key": "f11",
-				"when": "resourceExtname==.cpp"
+				"when": "resourceExtname=~/.cpp|.c|.py|.java|.rs/"
 			},
 			{
 				"command": "caseView.testAllCaseForceCompile",
 				"key": "ctrl+f10",
-				"when": "resourceExtname==.cpp"
+				"when": "resourceExtname=~/.cpp|.c|.py|.java|.rs/"
 			},
 			{
 				"command": "explorer.compileAndRunForceCompile",
 				"key": "ctrl+f11",
-				"when": "resourceExtname==.cpp"
+				"when": "resourceExtname=~/.cpp|.c|.py|.java|.rs/"
 			}
 		]
 	},
