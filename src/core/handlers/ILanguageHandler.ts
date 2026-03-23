@@ -20,6 +20,14 @@ export interface IRunCommand {
 }
 
 /**
+ * 编译命令配置
+ */
+export interface ICompileCommand {
+    command: string;
+    args: string[];
+}
+
+/**
  * 调试配置
  */
 export interface IDebugConfig {
@@ -142,6 +150,22 @@ export interface ILanguageHandler {
      * @returns 错误信息，如果验证通过则返回 null
      */
     validatePreset(preset: LanguagePreset): string | null;
+
+    /**
+     * 获取结构化编译命令（用于生成 compile_commands.json）
+     * 
+     * @param srcFile 源文件路径
+     * @param preset 语言预设
+     * @param basePath 源文件基目录
+     * @param outputPath 输出目录
+     * @returns 编译命令配置
+     */
+    getCompileCommand?(
+        srcFile: string,
+        preset: LanguagePreset,
+        basePath: string,
+        outputPath: string
+    ): ICompileCommand;
 
     /**
      * 生成编译命令字符串（用于缓存键）

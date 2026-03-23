@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawn } from 'child_process';
-import { ILanguageHandler, ICompileResult, IRunCommand, IDebugConfig, IDebuggerInfo } from './ILanguageHandler';
+import { ILanguageHandler, ICompileCommand, ICompileResult, IRunCommand, IDebugConfig, IDebuggerInfo } from './ILanguageHandler';
 import { LanguagePreset } from '../models/LanguagePreset';
 
 /**
@@ -104,15 +104,26 @@ export abstract class BaseCompiledHandler implements ILanguageHandler {
         };
     }
 
+    getCompileCommand(
+        srcFile: string,
+        preset: LanguagePreset,
+        basePath: string,
+        outputPath: string
+    ): ICompileCommand {
+        return {
+            command: this.getCompilerPath(preset),
+            args: this.getCompileArgs(srcFile, preset, basePath, outputPath)
+        };
+    }
+
     getCompileCommandString(
         srcFile: string,
         preset: LanguagePreset,
         basePath: string,
         outputPath: string
     ): string {
-        const compilerPath = this.getCompilerPath(preset);
-        const args = this.getCompileArgs(srcFile, preset, basePath, outputPath);
-        return `${compilerPath} ${args.join(' ')}`;
+        const compileCommand = this.getCompileCommand(srcFile, preset, basePath, outputPath);
+        return `${compileCommand.command} ${compileCommand.args.join(' ')}`;
     }
 
     abstract validatePreset(preset: LanguagePreset): string | null;

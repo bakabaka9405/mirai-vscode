@@ -27,7 +27,7 @@ export class CppConfigGenerator implements ILspConfigGenerator {
         const registry = LanguageHandlerRegistry.getInstance();
         const handler = registry.getHandler(preset.languageId);
 
-        if (!handler?.getCompileCommandString) {
+        if (!handler?.getCompileCommand) {
             return { 
                 success: false, 
                 warning: '无法生成 compile_commands.json：当前语言处理器不支持' 
@@ -40,11 +40,15 @@ export class CppConfigGenerator implements ILspConfigGenerator {
             f.endsWith('.c++') || f.endsWith('.c')
         );
 
-        const commands = sourceFiles.map(file => ({
-            directory: srcBasePath,
-            command: handler.getCompileCommandString!(file, preset, srcBasePath, buildBasePath),
-            file: file
-        }));
+        const commands = sourceFiles.map(file => {
+            const compileCommand = handler.getCompileCommand!(file, preset, srcBasePath, buildBasePath);
+
+            return {
+                directory: srcBasePath,
+                arguments: [compileCommand.command, ...compileCommand.args],
+                file: file
+            };
+        });
 
         return { success: true, config: commands };
     }
