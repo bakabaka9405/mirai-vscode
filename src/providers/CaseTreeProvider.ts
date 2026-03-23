@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
 import { TestCase, TestStatus } from '../core/models';
 
 const ICONS: Partial<Record<TestStatus, string>> = {
@@ -23,6 +22,8 @@ export class CaseTreeProvider implements vscode.TreeDataProvider<CaseTreeItem> {
     private cases: TestCase[] = [];
     private currentCase?: TestCase;
     private itemMap = new WeakMap<TestCase, CaseTreeItem>();
+
+    constructor(private readonly extensionUri: vscode.Uri) { }
 
     get current(): TestCase | undefined {
         return this.currentCase;
@@ -52,7 +53,7 @@ export class CaseTreeProvider implements vscode.TreeDataProvider<CaseTreeItem> {
     private getOrCreateItem(testCase: TestCase): CaseTreeItem {
         let item = this.itemMap.get(testCase);
         if (!item) {
-            item = new CaseTreeItem(testCase);
+            item = new CaseTreeItem(testCase, this.extensionUri);
             this.itemMap.set(testCase, item);
         } else {
             item.update();
@@ -118,7 +119,10 @@ export class CaseTreeProvider implements vscode.TreeDataProvider<CaseTreeItem> {
  * 测试样例树节点
  */
 export class CaseTreeItem extends vscode.TreeItem {
-    constructor(public readonly testCase: TestCase) {
+    constructor(
+        public readonly testCase: TestCase,
+        private readonly extensionUri: vscode.Uri
+    ) {
         super('', vscode.TreeItemCollapsibleState.None);
         this.update();
         this.contextValue = 'case';
@@ -148,7 +152,7 @@ export class CaseTreeItem extends vscode.TreeItem {
         if (result) {
             const iconFile = ICONS[result.status];
             if (iconFile) {
-                const iconPath = vscode.Uri.file(path.join(__dirname, '..', '..', 'media', iconFile));
+                const iconPath = vscode.Uri.joinPath(this.extensionUri, 'media', iconFile);
                 this.iconPath = { light: iconPath, dark: iconPath };
             } else {
                 this.iconPath = undefined;

@@ -48,7 +48,7 @@ export abstract class BaseCompiledHandler implements ILanguageHandler {
             outputPath,
             path.dirname(relativePath),
             path.basename(relativePath, ext) + this.getOutputExtension()
-        );
+        ).normalize();
     }
 
     async compile(

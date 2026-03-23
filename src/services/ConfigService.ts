@@ -21,7 +21,7 @@ export class ConfigService {
         this.refreshPresets();
 
         vscode.workspace.onDidChangeConfiguration(e => {
-            if (e.affectsConfiguration('mirai-vscode')) {
+            if (e.affectsConfiguration('mirai-vscode') || e.affectsConfiguration('python.venvFolders')) {
                 this.config = vscode.workspace.getConfiguration('mirai-vscode');
                 this.refreshPresets();
                 this._onDidChange.fire();
@@ -76,6 +76,52 @@ export class ConfigService {
         const workspace = this.workspacePath;
         if (!workspace) { return ''; }
         return path.join(workspace, this.get<string>('build_base_dir') || '');
+    }
+
+    /**
+     * 获取 Python 虚拟环境文件夹列表
+     * 优先使用 mirai-vscode.python_venv_folders，如果为空则从 python.venvFolders 读取
+     */
+    getPythonVenvFolders(): string[] {
+        const overrideFolders = this.get<string[]>('python_venv_folders') || [];
+        if (overrideFolders.length > 0) {
+            return overrideFolders.map(p => this.getAbsolutePath(p));
+        }
+
+        try {
+            const pythonConfig = vscode.workspace.getConfiguration('python');
+            const pythonVenvFolders = pythonConfig.get<string[]>('venvFolders') || [];
+            return pythonVenvFolders.map(p => this.getAbsolutePath(p));
+        } catch {
+            return [];
+        }
+    }
+
+    /**
+     * 同步 Python 解释器到 Python 扩展
+     * 用于在切换虚拟环境时更新类型检查
+     */
+    async syncPythonInterpreter(interpreterPath: string): Promise<boolean> {
+        try {
+            // 检查 Python 扩展是否已安装
+            const pythonExtension = vscode.extensions.getExtension('ms-python.python');
+            if (!pythonExtension) {
+                return false;
+            }
+
+            // 更新工作区配置
+            const pythonConfig = vscode.workspace.getConfiguration('python');
+            await pythonConfig.update(
+                'defaultInterpreterPath',
+                interpreterPath,
+                vscode.ConfigurationTarget.Workspace
+            );
+
+            return true;
+        } catch (error) {
+            console.error('Failed to sync Python interpreter:', error);
+            return false;
+        }
     }
 
     /**
@@ -177,6 +223,9 @@ export class ConfigService {
             }
         }
 
+        // 搜索虚拟环境中的 Python 解释器
+        this.searchVenvPythonInterpreters();
+
         // Java
         const javacPaths = this.getAllExecutable('javac');
         for (const p of javacPaths) {
@@ -250,6 +299,56 @@ export class ConfigService {
             return match ? match[1] : null;
         } catch {
             return null;
+        }
+    }
+
+    /**
+     * 搜索虚拟环境中的 Python 解释器
+     */
+    private searchVenvPythonInterpreters(): void {
+        const fs = require('fs');
+        const venvFolders = this.getPythonVenvFolders();
+        
+        for (const venvFolder of venvFolders) {
+            if (!fs.existsSync(venvFolder)) {
+                continue;
+            }
+
+            try {
+                const entries = fs.readdirSync(venvFolder, { withFileTypes: true });
+                for (const entry of entries) {
+                    if (!entry.isDirectory()) {
+                        continue;
+                    }
+
+                    const venvPath = path.join(venvFolder, entry.name);
+                    // 检查常见的虚拟环境结构
+                    const possiblePaths = [
+                        path.join(venvPath, 'bin', 'python'),      // Linux/macOS
+                        path.join(venvPath, 'bin', 'python3'),     // Linux/macOS
+                        path.join(venvPath, 'Scripts', 'python.exe'), // Windows
+                        path.join(venvPath, 'Scripts', 'python3.exe') // Windows
+                    ];
+
+                    for (const pythonPath of possiblePaths) {
+                        if (fs.existsSync(pythonPath)) {
+                            const version = this.getPythonVersion(pythonPath);
+                            if (version) {
+                                this._presets.push(LanguagePreset.fromObject({
+                                    label: `Python ${version} (${entry.name})`,
+                                    languageId: 'python',
+                                    interpreterPath: pythonPath,
+                                    description: pythonPath
+                                }));
+                                break; // 找到一个就跳出，避免重复
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                // 忽略读取错误，继续处理下一个文件夹
+                console.error(`Failed to search venv in ${venvFolder}:`, error);
+            }
         }
     }
 

@@ -1,9 +1,13 @@
 import * as vscode from 'vscode';
-import * as fs from 'fs';
-import * as path from 'path';
 
 // Core
 import { Problem } from './core/models';
+import { 
+    LspConfigManager, 
+    CppConfigGenerator, 
+    PythonConfigGenerator, 
+    RustConfigGenerator 
+} from './core/lsp';
 
 // Services
 import { 
@@ -28,6 +32,9 @@ import { StatusBarManager } from './ui';
 // Commands
 import { CommandRegistry } from './commands';
 
+// LSP 配置管理器（模块级变量）
+let lspConfigManager: LspConfigManager;
+
 /**
  * 扩展激活入口
  */
@@ -39,15 +46,39 @@ export function activate(context: vscode.ExtensionContext): void {
     const listener = ListenerService.getInstance();
     const state = StateManager.getInstance();
 
+    // 初始化 LSP 配置管理器
+    lspConfigManager = new LspConfigManager();
+    lspConfigManager.registerGenerator(new CppConfigGenerator());
+    lspConfigManager.registerGenerator(new PythonConfigGenerator());
+    lspConfigManager.registerGenerator(new RustConfigGenerator());
+
     // 加载试题数据
     const problemsRoot = persistence.load();
 
     // 初始化 Providers
     const problemsProvider = new ProblemsTreeProvider(problemsRoot);
-    const caseProvider = new CaseTreeProvider();
+    const caseProvider = new CaseTreeProvider(context.extensionUri);
     const inputEditor = new EditorViewProvider(context);
     const outputEditor = new EditorViewProvider(context, true);
     const expectedOutputEditor = new EditorViewProvider(context);
+
+    inputEditor.onDidChange(data => {
+        if (caseProvider.current) {
+            caseProvider.current.input = data;
+        }
+    });
+
+    outputEditor.onDidChange(data => {
+        if (caseProvider.current) {
+            caseProvider.current.output = data;
+        }
+    });
+
+    expectedOutputEditor.onDidChange(data => {
+        if (caseProvider.current) {
+            caseProvider.current.expectedOutput = data;
+        }
+    });
 
     // 注册树视图
     const problemsTreeView = vscode.window.createTreeView('problemsExplorer', {
@@ -104,23 +135,26 @@ export function activate(context: vscode.ExtensionContext): void {
         expectedOutputEditor.updateTheme();
     });
 
-    // 文件监听（用于 compile_commands.json）
-    const watcher = vscode.workspace.createFileSystemWatcher('**/*.cpp', false, true, false);
-    watcher.onDidCreate(() => updateCompileCommands(state, config));
-    watcher.onDidDelete(() => updateCompileCommands(state, config));
+    // 文件监听（用于 LSP 配置更新）
+    const watcher = vscode.workspace.createFileSystemWatcher(
+        '**/*.{cpp,cc,cxx,c,py,rs}', 
+        false, true, false
+    );
+    watcher.onDidCreate(() => updateLspConfigs(state, config));
+    watcher.onDidDelete(() => updateLspConfigs(state, config));
 
     // 配置变更
     config.onDidChange(() => {
-        updateCompileCommands(state, config);
+        updateLspConfigs(state, config);
     });
 
     state.onPresetChanged(() => {
-        updateCompileCommands(state, config);
-        vscode.commands.executeCommand('clangd.restart');
+        updateLspConfigs(state, config);
+        vscode.commands.executeCommand('clangd.restart').then(undefined, () => {});
     });
 
     state.onOverrideChanged(() => {
-        updateCompileCommands(state, config);
+        updateLspConfigs(state, config);
         compiler.clearCache();
     });
 
@@ -147,56 +181,18 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 /**
- * 更新 compile_commands.json
+ * 统一接口：更新所有 LSP 配置
  */
-function updateCompileCommands(state: StateManager, config: ConfigService): void {
-    if (!config.get<boolean>('generate_compile_commands')) { return; }
-    
+async function updateLspConfigs(state: StateManager, config: ConfigService): Promise<void> {
     const preset = state.getEffectivePreset();
     if (!preset) { return; }
 
-    const workspace = config.workspacePath;
-    if (!workspace) { return; }
-
-    const srcBase = config.srcBasePath;
-    const buildBase = config.buildBasePath;
-    const outputDir = path.join(workspace, config.get<string>('compile_commands_path') || '');
-
-    // 生成 compile_commands.json
-    const commands = generateCompileCommands(preset, srcBase, buildBase);
-    
-    fs.mkdirSync(outputDir, { recursive: true });
-    fs.writeFileSync(path.join(outputDir, 'compile_commands.json'), JSON.stringify(commands, null, 2));
-}
-
-/**
- * 生成 compile_commands.json 内容
- */
-function generateCompileCommands(preset: any, srcBase: string, buildBase: string): object[] {
-    const commands: object[] = [];
-    
-    function scanDir(dir: string): void {
-        if (!fs.existsSync(dir)) { return; }
-        
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-        for (const entry of entries) {
-            const fullPath = path.join(dir, entry.name);
-            if (entry.isDirectory()) {
-                scanDir(fullPath);
-            } else if (entry.name.endsWith('.cpp')) {
-                commands.push({
-                    directory: srcBase,
-                    command: preset.generateCompileCommand(fullPath, srcBase, buildBase),
-                    file: fullPath
-                });
-            }
-        }
-    }
-
-    scanDir(srcBase);
-    return commands;
+    await lspConfigManager.updateAllConfigs(
+        preset,
+        config.srcBasePath,
+        config.buildBasePath
+    );
 }
 
 export function deactivate(): void {
-    // 清理由服务管理
 }

@@ -68,13 +68,13 @@ export class RunnerService {
         // 获取运行命令
         const runCommand = handler.getRunCommand(srcFile, preset, basePath, outputPath);
 
-        return this.executeTest(runCommand, testCase, preset, token);
+        return this.runTestImpl(runCommand, testCase, preset, token);
     }
 
     /**
      * 执行测试
      */
-    private async executeTest(
+    private async runTestImpl(
         runCommand: { command: string; args: string[]; cwd?: string },
         testCase: TestCase,
         preset: LanguagePreset,

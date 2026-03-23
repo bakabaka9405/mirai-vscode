@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { StateManager } from '../state';
 import { ConfigService, CompilerService, RunnerService } from '../services';
-import { ProblemsTreeProvider, ProblemTreeItem } from '../providers';
+import { ProblemsTreeProvider, CaseTreeProvider, EditorViewProvider, ProblemTreeItem } from '../providers';
 import { TestCase, TestStatus, LanguagePreset } from '../core/models';
 import { LanguageHandlerRegistry, DebuggerDetector } from '../core/handlers';
 
@@ -21,10 +21,10 @@ export class CommandRegistry {
     constructor(
         private context: vscode.ExtensionContext,
         private problemsProvider: ProblemsTreeProvider,
-        private caseProvider: any, // CaseTreeProvider
-        private inputEditor: any,  // EditorViewProvider
-        private outputEditor: any,
-        private expectedOutputEditor: any
+        private caseProvider: CaseTreeProvider,
+        private inputEditor: EditorViewProvider,
+        private outputEditor: EditorViewProvider,
+        private expectedOutputEditor: EditorViewProvider
     ) {
         this.state = StateManager.getInstance();
         this.config = ConfigService.getInstance();
@@ -100,7 +100,7 @@ export class CommandRegistry {
             // 根据当前预设的语言决定文件扩展名
             const ext = this.getFileExtensionForLanguage();
             const filePath = path.join(workspace, srcBase, item.problem.getPath() + ext);
-            
+
             fs.mkdirSync(path.dirname(filePath), { recursive: true });
             if (!fs.existsSync(filePath)) {
                 fs.writeFileSync(filePath, '');
@@ -197,10 +197,10 @@ export class CommandRegistry {
         this.register('caseView.testAllCase', () => this.runAllTests(false));
         this.register('caseView.testAllCaseForceCompile', () => this.runAllTests(true));
         this.register('caseView.testSingleCase', (item: any) => this.runSingleTest(item.testCase, false));
-        
+
         this.register('explorer.compileAndRun', () => this.compileAndRun(false));
         this.register('explorer.compileAndRunForceCompile', () => this.compileAndRun(true));
-        
+
         this.register('startDebugging', () => this.startDebugging());
         this.register('caseView.debugCase', (item: any) => this.startDebugging(item.testCase));
     }
@@ -236,7 +236,7 @@ export class CommandRegistry {
     private registerPresetCommands(): void {
         this.register('mirai-vscode.onBtnToggleTestPresetClicked', async () => {
             const srcFile = vscode.window.activeTextEditor?.document.fileName;
-            
+
             // 根据当前文件过滤预设
             let presets = this.config.presets;
             if (srcFile) {
@@ -264,6 +264,15 @@ export class CommandRegistry {
             if (selected) {
                 this.state.currentPreset = presets[selected.index];
                 this.compiler.clearCache();
+
+                // 如果是 Python 预设，同步解释器到 Python 扩展
+                const selectedPreset = presets[selected.index];
+                if (selectedPreset.languageId === 'python' && selectedPreset.interpreterPath) {
+                    const synced = await this.config.syncPythonInterpreter(selectedPreset.interpreterPath);
+                    if (synced) {
+                        vscode.window.showInformationMessage(`已同步 Python 解释器: ${selectedPreset.label}`);
+                    }
+                }
             }
         });
 
@@ -507,14 +516,14 @@ export class CommandRegistry {
         }
 
         const runCommand = handler.getRunCommand(
-            srcFile, 
-            preset, 
-            this.config.srcBasePath, 
+            srcFile,
+            preset,
+            this.config.srcBasePath,
             this.config.buildBasePath
         );
 
         const terminal = vscode.window.createTerminal('mirai-vscode:编译运行');
-        
+
         // 构建终端命令
         let terminalCommand: string;
         if (runCommand.args.length > 0) {
@@ -522,7 +531,7 @@ export class CommandRegistry {
         } else {
             terminalCommand = `& "${runCommand.command}"`;
         }
-        
+
         terminal.sendText(terminalCommand);
         terminal.show();
     }
@@ -584,7 +593,7 @@ export class CommandRegistry {
         }
 
         const folder = vscode.workspace.workspaceFolders?.[0];
-        
+
         // 构建 VS Code 调试配置
         const { extensionId, ...restConfig } = debugConfig;
         const vsDebugConfig: vscode.DebugConfiguration = {

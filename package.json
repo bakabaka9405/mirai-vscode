@@ -350,13 +350,29 @@
 			"properties": {
 				"mirai-vscode.generate_compile_commands": {
 					"type": "boolean",
-					"description": "生成 compile_commands.json 文件",
+					"description": "生成 compile_commands.json",
 					"default": false
+				},
+				"mirai-vscode.generate_pyrightconfig": {
+					"type": "boolean",
+					"description": "生成 pyrightconfig.json",
+					"default": false
+				},
+				"mirai-vscode.generate_rust_project": {
+					"type": "boolean",
+					"description": "生成 rust-project.json",
+					"default": false
+				},
+				"mirai-vscode.lsp_config_path": {
+					"type": "string",
+					"description": "LSP 配置文件输出目录",
+					"default": ".vscode"
 				},
 				"mirai-vscode.compile_commands_path": {
 					"type": "string",
 					"description": "compile_commands.json 相对项目根目录的路径",
-					"default": ".vscode"
+					"default": ".vscode",
+					"deprecationMessage": "请使用 mirai-vscode.lsp_config_path 代替"
 				},
 				"mirai-vscode.src_base_dir": {
 					"type": "string",
@@ -373,9 +389,17 @@
 					"description": "自动搜索编译器",
 					"default": true
 				},
+				"mirai-vscode.python_venv_folders": {
+					"type": "array",
+					"description": "Python 虚拟环境文件夹路径（覆盖 python.venvFolders）",
+					"items": {
+						"type": "string"
+					},
+					"default": []
+				},
 				"mirai-vscode.test_presets": {
 					"type": "array",
-					"description": "编译测试预设（向后兼容，建议使用 language_presets）",
+					"description": "编译测试预设（旧版）",
 					"items": {
 						"type": "object",
 						"properties": {
@@ -475,19 +499,19 @@
 							},
 							"compilerPath": {
 								"type": "string",
-								"description": "编译器路径（编译型语言）"
+								"description": "编译器路径"
 							},
 							"interpreterPath": {
 								"type": "string",
-								"description": "解释器路径（Python）"
+								"description": "解释器路径"
 							},
 							"runtimePath": {
 								"type": "string",
-								"description": "运行时路径（Java 的 java 命令）"
+								"description": "运行时路径"
 							},
 							"std": {
 								"type": "string",
-								"description": "语言标准（C/C++: c++17, c11 等）"
+								"description": "语言标准"
 							},
 							"optimization": {
 								"type": "string",
@@ -502,7 +526,7 @@
 							},
 							"additionalIncludePaths": {
 								"type": "array",
-								"description": "额外包含路径（C/C++）",
+								"description": "额外包含路径",
 								"items": { "type": "string" },
 								"default": []
 							},
