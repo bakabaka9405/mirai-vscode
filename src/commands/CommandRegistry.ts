@@ -142,10 +142,7 @@ export class CommandRegistry {
                 vscode.window.showErrorMessage('当前未选中试题');
                 return;
             }
-            const testCase = this.caseProvider.addCase();
-            if (testCase) {
-                this.state.currentProblem.cases.push(testCase);
-            }
+            this.caseProvider.addCase();
         });
 
         this.register('caseView.deleteCase', (item: any) => {
@@ -235,44 +232,28 @@ export class CommandRegistry {
 
     private registerPresetCommands(): void {
         this.register('mirai-vscode.onBtnToggleTestPresetClicked', async () => {
-            const srcFile = vscode.window.activeTextEditor?.document.fileName;
-
-            // 根据当前文件过滤预设
-            let presets = this.config.presets;
-            if (srcFile) {
-                const filteredPresets = this.config.getPresetsForFile(srcFile);
-                if (filteredPresets.length > 0) {
-                    presets = filteredPresets;
-                }
-            }
+            const presets = this.getAvailablePresetsForActiveEditor();
 
             if (presets.length === 0) {
                 vscode.window.showErrorMessage('没有可用的预设');
                 return;
             }
 
+            const currentPresetKey = this.state.currentPreset?.getStorageKey();
             const items = presets.map((preset, index) => ({
                 label: preset.label,
                 description: `[${preset.languageId}] ${preset.description}`,
-                index
+                index,
+                picked: preset.getStorageKey() === currentPresetKey
             }));
 
             const selected = await vscode.window.showQuickPick(items, {
-                placeHolder: items[0].label
+                placeHolder: this.state.currentPreset?.label || items[0].label
             });
 
             if (selected) {
                 this.state.currentPreset = presets[selected.index];
                 this.compiler.clearCache();
-
-                // 如果是 Python 预设，同步解释器到 Python 扩展
-                const selectedPreset = presets[selected.index];
-                if (selectedPreset.languageId === 'python' && selectedPreset.interpreterPath) {
-                    const synced = await this.config.syncPythonInterpreter(selectedPreset.interpreterPath);
-                    if (synced) {
-                        vscode.window.showInformationMessage(`已同步 Python 解释器: ${selectedPreset.label}`);
-                    }
-                }
             }
         });
 
@@ -372,10 +353,53 @@ export class CommandRegistry {
 
     // 辅助方法
     private async ensurePreset(): Promise<boolean> {
+        const activeLanguageId = this.getActiveEditorLanguageId();
+        if (activeLanguageId) {
+            if (this.state.switchToLanguage(activeLanguageId)) {
+                return true;
+            }
+            if (this.state.currentPreset?.languageId !== activeLanguageId) {
+                this.state.currentPreset = undefined;
+            }
+        }
+
         if (!this.state.currentPreset) {
             await vscode.commands.executeCommand('mirai-vscode.onBtnToggleTestPresetClicked');
         }
         return !!this.state.currentPreset;
+    }
+
+    private getActiveEditorLanguageId(): string | undefined {
+        const document = vscode.window.activeTextEditor?.document;
+        if (!document) {
+            return undefined;
+        }
+
+        if (this.registry.hasLanguage(document.languageId)) {
+            return document.languageId;
+        }
+
+        return this.registry.detectLanguageId(document.fileName);
+    }
+
+    private getAvailablePresetsForActiveEditor(): LanguagePreset[] {
+        const languageId = this.getActiveEditorLanguageId();
+        if (languageId) {
+            const presets = this.config.getPresetsByLanguage(languageId);
+            if (presets.length > 0) {
+                return presets;
+            }
+        }
+
+        const srcFile = vscode.window.activeTextEditor?.document.fileName;
+        if (srcFile) {
+            const presets = this.config.getPresetsForFile(srcFile);
+            if (presets.length > 0) {
+                return presets;
+            }
+        }
+
+        return this.config.presets;
     }
 
     private async saveCurrentCase(): Promise<void> {
