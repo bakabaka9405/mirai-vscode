@@ -105,6 +105,28 @@ export class LanguagePreset implements ILanguagePreset {
     }
 
     /**
+     * 获取用于持久化匹配的稳定键
+     */
+    getStorageKey(): string {
+        return JSON.stringify({
+            label: this.label,
+            languageId: this.languageId,
+            compilerPath: this.compilerPath,
+            interpreterPath: this.interpreterPath,
+            runtimePath: this.runtimePath,
+            std: this.std,
+            optimization: this.optimization,
+            additionalArgs: this.additionalArgs,
+            additionalIncludePaths: this.additionalIncludePaths,
+            runtimeArgs: this.runtimeArgs,
+            timeoutSec: this.timeoutSec,
+            memoryLimitMB: this.memoryLimitMB,
+            mixStdoutStderr: this.mixStdoutStderr,
+            debuggerType: this.debuggerType
+        });
+    }
+
+    /**
      * 从配置对象创建预设
      */
     static fromObject(obj: Partial<ILanguagePreset> & { label: string }): LanguagePreset {

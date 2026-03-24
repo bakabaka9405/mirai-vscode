@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as crypto from 'crypto';
+import * as path from 'path';
 import { spawn } from 'child_process';
 import { LanguagePreset } from '../core/models';
 import { 
@@ -115,13 +116,7 @@ export class CompilerService {
 
         const basePath = this.config.srcBasePath;
         const outputPath = this.config.buildBasePath;
-
-        // 计算缓存键
-        const cacheKey = this.getCacheKey(srcFile, preset, handler, basePath, outputPath);
-        
-        if (!force && this.fileHashCache.get(srcFile) === cacheKey) {
-            return { success: true, message: '无变化', output: '' };
-        }
+        const outputFile = handler.getOutputFile(srcFile, basePath, outputPath);
 
         // 验证编译器/解释器
         const validationError = await this.validateCompiler(preset, handler);
@@ -131,6 +126,18 @@ export class CompilerService {
                 message: validationError,
                 output: ''
             };
+        }
+
+        // 计算缓存键
+        const cacheKey = await this.getCacheKey(srcFile, preset, handler, basePath, outputPath);
+        
+        if (
+            !force
+            && cacheKey
+            && this.fileHashCache.get(srcFile) === cacheKey
+            && fs.existsSync(outputFile)
+        ) {
+            return { success: true, message: '无变化', output: '' };
         }
 
         // 执行编译
@@ -148,7 +155,12 @@ export class CompilerService {
 
         // 更新缓存
         if (result.success) {
-            this.fileHashCache.set(srcFile, cacheKey);
+            const nextCacheKey = cacheKey || await this.getCacheKey(srcFile, preset, handler, basePath, outputPath);
+            if (nextCacheKey) {
+                this.fileHashCache.set(srcFile, nextCacheKey);
+            } else {
+                this.fileHashCache.delete(srcFile);
+            }
         }
 
         return result;
@@ -157,17 +169,58 @@ export class CompilerService {
     /**
      * 计算缓存键
      */
-    private getCacheKey(
+    private async getCacheKey(
         srcFile: string,
         preset: LanguagePreset,
         handler: ILanguageHandler,
         basePath: string,
         outputPath: string
-    ): string {
-        const fileHash = this.getFileHash(srcFile);
+    ): Promise<string | undefined> {
         const commandString = handler.getCompileCommandString?.(srcFile, preset, basePath, outputPath) 
             || `${preset.languageId}:${preset.label}`;
-        return fileHash + commandString;
+        const dependencyFiles = await this.getCacheDependencyFiles(srcFile, preset, handler, basePath, outputPath);
+        if (!dependencyFiles) {
+            return undefined;
+        }
+
+        const hash = crypto.createHash('md5');
+        hash.update(commandString);
+        hash.update('\0');
+
+        for (const file of dependencyFiles) {
+            if (!fs.existsSync(file)) {
+                return undefined;
+            }
+            hash.update(file);
+            hash.update('\0');
+            hash.update(this.getFileHash(file));
+            hash.update('\0');
+        }
+
+        return hash.digest('hex');
+    }
+
+    private async getCacheDependencyFiles(
+        srcFile: string,
+        preset: LanguagePreset,
+        handler: ILanguageHandler,
+        basePath: string,
+        outputPath: string
+    ): Promise<string[] | undefined> {
+        try {
+            const dependencies = handler.getCacheDependencyFiles
+                ? await handler.getCacheDependencyFiles(srcFile, preset, basePath, outputPath)
+                : [srcFile];
+            if (!dependencies) {
+                return undefined;
+            }
+
+            return Array.from(new Set(
+                [srcFile, ...dependencies].map(file => path.normalize(path.resolve(file)))
+            )).sort();
+        } catch {
+            return undefined;
+        }
     }
 
     /**

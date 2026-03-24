@@ -1,13 +1,14 @@
 import * as vscode from 'vscode';
 
 // Core
-import { Problem } from './core/models';
+import { Problem, LanguagePreset } from './core/models';
 import { 
     LspConfigManager, 
     CppConfigGenerator, 
     PythonConfigGenerator, 
     RustConfigGenerator 
 } from './core/lsp';
+import { LanguageHandlerRegistry } from './core/handlers';
 
 // Services
 import { 
@@ -45,6 +46,7 @@ export function activate(context: vscode.ExtensionContext): void {
     const persistence = PersistenceService.getInstance();
     const listener = ListenerService.getInstance();
     const state = StateManager.getInstance();
+    state.initialize(context);
 
     // 初始化 LSP 配置管理器
     lspConfigManager = new LspConfigManager();
@@ -145,10 +147,12 @@ export function activate(context: vscode.ExtensionContext): void {
 
     // 配置变更
     config.onDidChange(() => {
+        syncPresetWithActiveEditor(vscode.window.activeTextEditor, state);
         updateLspConfigs(state, config);
     });
 
-    state.onPresetChanged(() => {
+    state.onPresetChanged(preset => {
+        void syncPythonInterpreterForPreset(preset, config);
         updateLspConfigs(state, config);
         vscode.commands.executeCommand('clangd.restart').then(undefined, () => {});
     });
@@ -157,6 +161,14 @@ export function activate(context: vscode.ExtensionContext): void {
         updateLspConfigs(state, config);
         compiler.clearCache();
     });
+
+    context.subscriptions.push(
+        vscode.window.onDidChangeActiveTextEditor(editor => {
+            syncPresetWithActiveEditor(editor, state);
+        })
+    );
+
+    syncPresetWithActiveEditor(vscode.window.activeTextEditor, state);
 
     // 启动 HTTP 监听
     listener.onProblemReceived(problem => {
@@ -192,6 +204,44 @@ async function updateLspConfigs(state: StateManager, config: ConfigService): Pro
         config.srcBasePath,
         config.buildBasePath
     );
+}
+
+function syncPresetWithActiveEditor(
+    editor: vscode.TextEditor | undefined,
+    state: StateManager
+): void {
+    const languageId = resolveDocumentLanguageId(editor?.document);
+    if (!languageId) {
+        return;
+    }
+
+    if (!state.switchToLanguage(languageId) && state.currentPreset?.languageId !== languageId) {
+        state.currentPreset = undefined;
+    }
+}
+
+function resolveDocumentLanguageId(document: vscode.TextDocument | undefined): string | undefined {
+    if (!document) {
+        return undefined;
+    }
+
+    const registry = LanguageHandlerRegistry.getInstance();
+    if (registry.hasLanguage(document.languageId)) {
+        return document.languageId;
+    }
+
+    return registry.detectLanguageId(document.fileName);
+}
+
+async function syncPythonInterpreterForPreset(
+    preset: LanguagePreset | undefined,
+    config: ConfigService
+): Promise<void> {
+    if (preset?.languageId !== 'python' || !preset.interpreterPath) {
+        return;
+    }
+
+    await config.syncPythonInterpreter(preset.interpreterPath);
 }
 
 export function deactivate(): void {

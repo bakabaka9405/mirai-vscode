@@ -11,6 +11,25 @@ export class CppHandler extends BaseCompiledHandler {
     readonly displayName = 'C++';
     readonly fileExtensions = ['cpp', 'cc', 'cxx', 'c++', 'hpp', 'hxx', 'h++'];
 
+    private getCompilerArgs(preset: LanguagePreset, includeOptimization: boolean): string[] {
+        const args: string[] = [];
+
+        if (preset.std) {
+            args.push(`-std=${preset.std}`);
+        }
+        if (includeOptimization && preset.optimization) {
+            args.push(`-${preset.optimization}`);
+        }
+        if (preset.additionalArgs) {
+            args.push(...preset.additionalArgs);
+        }
+        if (preset.additionalIncludePaths) {
+            args.push(...preset.additionalIncludePaths.map(p => `-I${p}`));
+        }
+
+        return args;
+    }
+
     protected getCompilerPath(preset: LanguagePreset): string {
         return preset.compilerPath || 'g++';
     }
@@ -21,26 +40,23 @@ export class CppHandler extends BaseCompiledHandler {
         basePath: string,
         outputPath: string
     ): string[] {
-        const args: string[] = [];
-        
-        if (preset.std) {
-            args.push(`-std=${preset.std}`);
-        }
-        if (preset.optimization) {
-            args.push(`-${preset.optimization}`);
-        }
-        if (preset.additionalArgs) {
-            args.push(...preset.additionalArgs);
-        }
-        if (preset.additionalIncludePaths) {
-            args.push(...preset.additionalIncludePaths.map(p => `-I${p}`));
-        }
-        
+        const args = this.getCompilerArgs(preset, true);
+
         args.push(srcFile);
         args.push('-o');
         args.push(this.getOutputFile(srcFile, basePath, outputPath));
-        
+
         return args;
+    }
+
+    async getCacheDependencyFiles(
+        srcFile: string,
+        preset: LanguagePreset,
+        basePath: string,
+        outputPath: string
+    ): Promise<string[] | undefined> {
+        void outputPath;
+        return this.getDependencyFilesFromCompiler(srcFile, preset, basePath, this.getCompilerArgs(preset, false));
     }
 
     validatePreset(preset: LanguagePreset): string | null {

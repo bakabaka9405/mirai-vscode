@@ -184,6 +184,24 @@ export interface ILanguageHandler {
     ): string;
 
     /**
+     * 获取用于编译缓存判断的依赖文件列表
+     *
+     * 返回 undefined 表示无法可靠获取依赖，此时调用方应保守地重新编译
+     *
+     * @param srcFile 源文件路径
+     * @param preset 语言预设
+     * @param basePath 源文件基目录
+     * @param outputPath 输出目录
+     * @returns 依赖文件路径列表；若无法确定则返回 undefined
+     */
+    getCacheDependencyFiles?(
+        srcFile: string,
+        preset: LanguagePreset,
+        basePath: string,
+        outputPath: string
+    ): Promise<string[] | undefined>;
+
+    /**
      * 应用调试模式修改到预设
      * 
      * @param preset 语言预设（会被修改）

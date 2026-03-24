@@ -15,6 +15,8 @@ export abstract class BaseCompiledHandler implements ILanguageHandler {
     abstract readonly displayName: string;
     abstract readonly fileExtensions: string[];
 
+    private static readonly dependencyTarget = '__mirai_dep__';
+
     needsCompilation(): boolean {
         return true;
     }
@@ -124,6 +126,98 @@ export abstract class BaseCompiledHandler implements ILanguageHandler {
     ): string {
         const compileCommand = this.getCompileCommand(srcFile, preset, basePath, outputPath);
         return `${compileCommand.command} ${compileCommand.args.join(' ')}`;
+    }
+
+    protected async getDependencyFilesFromCompiler(
+        srcFile: string,
+        preset: LanguagePreset,
+        basePath: string,
+        args: string[]
+    ): Promise<string[] | undefined> {
+        return new Promise(resolve => {
+            const compilerPath = this.getCompilerPath(preset);
+            const cwd = basePath || path.dirname(srcFile);
+            const depArgs = [...args, '-MM', '-MT', BaseCompiledHandler.dependencyTarget, srcFile];
+            const child = spawn(compilerPath, depArgs, { windowsHide: true, cwd });
+
+            let stdout = '';
+
+            child.stdout.on('data', data => { stdout += data.toString(); });
+            child.on('exit', code => {
+                if (code !== 0) {
+                    resolve(undefined);
+                    return;
+                }
+                resolve(this.parseDependencyOutput(stdout, srcFile, cwd));
+            });
+            child.on('error', () => { resolve(undefined); });
+        });
+    }
+
+    private parseDependencyOutput(output: string, srcFile: string, cwd: string): string[] | undefined {
+        const normalizedOutput = output
+            .replace(/\r\n/g, '\n')
+            .replace(/\\\n/g, ' ')
+            .trim();
+        const prefix = `${BaseCompiledHandler.dependencyTarget}:`;
+        if (!normalizedOutput.startsWith(prefix)) {
+            return undefined;
+        }
+
+        const dependencyText = normalizedOutput.slice(prefix.length).trim();
+        const dependencies = this.tokenizeDependencyOutput(dependencyText)
+            .map(dep => this.resolveDependencyPath(dep, cwd))
+            .filter(dep => dep.length > 0);
+
+        dependencies.push(path.normalize(srcFile));
+        return Array.from(new Set(dependencies));
+    }
+
+    private tokenizeDependencyOutput(dependencyText: string): string[] {
+        const dependencies: string[] = [];
+        let current = '';
+
+        for (let i = 0; i < dependencyText.length; i++) {
+            const ch = dependencyText[i];
+
+            if (/\s/.test(ch)) {
+                if (current) {
+                    dependencies.push(current);
+                    current = '';
+                }
+                continue;
+            }
+
+            if (ch === '$' && dependencyText[i + 1] === '$') {
+                current += '$';
+                i++;
+                continue;
+            }
+
+            if (ch === '\\') {
+                const next = dependencyText[i + 1];
+                if (next && (/\s/.test(next) || next === '#' || next === '\\')) {
+                    current += next;
+                    i++;
+                    continue;
+                }
+            }
+
+            current += ch;
+        }
+
+        if (current) {
+            dependencies.push(current);
+        }
+
+        return dependencies;
+    }
+
+    private resolveDependencyPath(dependency: string, cwd: string): string {
+        const resolvedPath = path.isAbsolute(dependency)
+            ? dependency
+            : path.resolve(cwd, dependency);
+        return path.normalize(resolvedPath);
     }
 
     abstract validatePreset(preset: LanguagePreset): string | null;

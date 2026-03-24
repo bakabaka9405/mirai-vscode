@@ -3,12 +3,22 @@ import { LanguagePreset, Problem, TestCase } from '../core/models';
 import { LanguageHandlerRegistry } from '../core/handlers';
 import { ConfigService } from '../services';
 
+interface ILanguageSelectionState {
+    presetKey?: string;
+    overrideStd?: string;
+    overrideOptimization?: string;
+    overrideTimeLimit?: number;
+}
+
 /**
  * 全局状态管理器 - 管理扩展的运行时状态
  */
 export class StateManager {
     private static instance: StateManager;
     private config: ConfigService;
+    private workspaceState?: vscode.Memento;
+    private readonly selectionStorageKey = 'mirai-vscode.languageSelections';
+    private _languageSelections: Record<string, ILanguageSelectionState> = {};
 
     // 当前选中的编译预设
     private _currentPreset?: LanguagePreset;
@@ -36,11 +46,14 @@ export class StateManager {
     private constructor() {
         this.config = ConfigService.getInstance();
         
-        // 配置变更时重置预设
+        // 配置变更时重新绑定当前语言的预设对象
         this.config.onDidChange(() => {
-            if (this._currentPreset) {
-                this._currentPreset = undefined;
-                this._onPresetChanged.fire(undefined);
+            if (!this._currentPreset) {
+                return;
+            }
+
+            if (!this.switchToLanguage(this._currentPreset.languageId)) {
+                this.clearActiveSelection();
             }
         });
     }
@@ -52,14 +65,53 @@ export class StateManager {
         return StateManager.instance;
     }
 
+    initialize(context: vscode.ExtensionContext): void {
+        this.workspaceState = context.workspaceState;
+        this._languageSelections = context.workspaceState.get<Record<string, ILanguageSelectionState>>(
+            this.selectionStorageKey,
+            {}
+        );
+    }
+
     // 预设相关
     get currentPreset(): LanguagePreset | undefined {
         return this._currentPreset;
     }
 
     set currentPreset(preset: LanguagePreset | undefined) {
-        this._currentPreset = preset;
-        this._onPresetChanged.fire(preset);
+        if (!preset) {
+            this.clearActiveSelection();
+            return;
+        }
+
+        this.applyLanguageSelection(preset);
+    }
+
+    getPreferredPresetForLanguage(languageId: string): LanguagePreset | undefined {
+        const presets = this.config.getPresetsByLanguage(languageId);
+        if (presets.length === 0) {
+            return undefined;
+        }
+
+        const rememberedKey = this._languageSelections[languageId]?.presetKey;
+        if (rememberedKey) {
+            const rememberedPreset = presets.find(p => p.getStorageKey() === rememberedKey);
+            if (rememberedPreset) {
+                return rememberedPreset;
+            }
+        }
+
+        return presets[0];
+    }
+
+    switchToLanguage(languageId: string): boolean {
+        const preset = this.getPreferredPresetForLanguage(languageId);
+        if (!preset) {
+            return false;
+        }
+
+        this.applyLanguageSelection(preset);
+        return true;
     }
 
     /**
@@ -128,8 +180,12 @@ export class StateManager {
     }
 
     set overrideStd(value: string | undefined) {
+        if (this._overrideStd === value) {
+            return;
+        }
         this._overrideStd = value;
         this._onOverrideChanged.fire();
+        this.rememberCurrentLanguageSelection();
     }
 
     get overrideOptimization(): string | undefined {
@@ -137,8 +193,12 @@ export class StateManager {
     }
 
     set overrideOptimization(value: string | undefined) {
+        if (this._overrideOptimization === value) {
+            return;
+        }
         this._overrideOptimization = value;
         this._onOverrideChanged.fire();
+        this.rememberCurrentLanguageSelection();
     }
 
     get overrideTimeLimit(): number | undefined {
@@ -146,8 +206,79 @@ export class StateManager {
     }
 
     set overrideTimeLimit(value: number | undefined) {
+        if (this._overrideTimeLimit === value) {
+            return;
+        }
         this._overrideTimeLimit = value;
         this._onOverrideChanged.fire();
+        this.rememberCurrentLanguageSelection();
+    }
+
+    private applyLanguageSelection(preset: LanguagePreset): void {
+        const selection = this._languageSelections[preset.languageId];
+        const presetChanged = this._currentPreset !== preset;
+        const overrideChanged = this._overrideStd !== selection?.overrideStd
+            || this._overrideOptimization !== selection?.overrideOptimization
+            || this._overrideTimeLimit !== selection?.overrideTimeLimit;
+
+        this._currentPreset = preset;
+        this._overrideStd = selection?.overrideStd;
+        this._overrideOptimization = selection?.overrideOptimization;
+        this._overrideTimeLimit = selection?.overrideTimeLimit;
+
+        if (presetChanged) {
+            this._onPresetChanged.fire(preset);
+        }
+        if (overrideChanged) {
+            this._onOverrideChanged.fire();
+        }
+
+        this.rememberCurrentLanguageSelection();
+    }
+
+    private clearActiveSelection(): void {
+        const presetChanged = this._currentPreset !== undefined;
+        const overrideChanged = this._overrideStd !== undefined
+            || this._overrideOptimization !== undefined
+            || this._overrideTimeLimit !== undefined;
+
+        this._currentPreset = undefined;
+        this._overrideStd = undefined;
+        this._overrideOptimization = undefined;
+        this._overrideTimeLimit = undefined;
+
+        if (presetChanged) {
+            this._onPresetChanged.fire(undefined);
+        }
+        if (overrideChanged) {
+            this._onOverrideChanged.fire();
+        }
+    }
+
+    private rememberCurrentLanguageSelection(): void {
+        if (!this._currentPreset) {
+            return;
+        }
+
+        const languageId = this._currentPreset.languageId;
+        const selection: ILanguageSelectionState = {
+            presetKey: this._currentPreset.getStorageKey()
+        };
+
+        if (this._overrideStd !== undefined) {
+            selection.overrideStd = this._overrideStd;
+        }
+        if (this._overrideOptimization !== undefined) {
+            selection.overrideOptimization = this._overrideOptimization;
+        }
+        if (this._overrideTimeLimit !== undefined) {
+            selection.overrideTimeLimit = this._overrideTimeLimit;
+        }
+
+        this._languageSelections[languageId] = selection;
+        if (this.workspaceState) {
+            void this.workspaceState.update(this.selectionStorageKey, this._languageSelections);
+        }
     }
 
     dispose(): void {
