@@ -5,7 +5,17 @@ import { StateManager } from '../state';
 import { ConfigService, CompilerService, RunnerService } from '../services';
 import { ProblemsTreeProvider, CaseTreeProvider, EditorViewProvider, ProblemTreeItem } from '../providers';
 import { TestCase, TestStatus, LanguagePreset } from '../core/models';
-import { LanguageHandlerRegistry, DebuggerDetector } from '../core/handlers';
+import {
+    LanguageHandlerRegistry,
+    DebuggerDetector,
+    type ILanguageHandler,
+    type ICompileResult
+} from '../core/handlers';
+
+type PreparedCommandContext = {
+    preset: LanguagePreset;
+    srcFile: string;
+};
 
 /**
  * 命令注册器 - 集中管理所有命令
@@ -138,8 +148,7 @@ export class CommandRegistry {
 
     private registerCaseCommands(): void {
         this.register('caseView.addCase', () => {
-            if (!this.state.currentProblem) {
-                vscode.window.showErrorMessage('当前未选中试题');
+            if (!this.requireCurrentProblem()) {
                 return;
             }
             this.caseProvider.addCase();
@@ -169,8 +178,7 @@ export class CommandRegistry {
         });
 
         this.register('caseView.searchCasesInFolder', async () => {
-            if (!this.state.currentProblem) {
-                vscode.window.showErrorMessage('当前未选中试题');
+            if (!this.requireCurrentProblem()) {
                 return;
             }
             // TODO: 实现从文件夹搜索样例
@@ -258,23 +266,23 @@ export class CommandRegistry {
         });
 
         this.register('mirai-vscode.onBtnToggleOverridingStdClicked', async () => {
-            if (!this.state.currentPreset) {
-                vscode.window.showErrorMessage('未选择编译预设');
+            const preset = this.requireCurrentPreset();
+            if (!preset) {
                 return;
             }
 
             // 根据语言显示不同的标准选项
-            const languageId = this.state.currentPreset.languageId;
+            const languageId = preset.languageId;
             let items: string[];
 
             if (languageId === 'cpp') {
-                const current = this.state.currentPreset.std;
+                const current = preset.std;
                 items = [
                     current ? `不改变（${current}）` : '不改变',
                     'c++98', 'c++11', 'c++14', 'c++17', 'c++20', 'c++23', 'c++26'
                 ];
             } else if (languageId === 'c') {
-                const current = this.state.currentPreset.std;
+                const current = preset.std;
                 items = [
                     current ? `不改变（${current}）` : '不改变',
                     'c89', 'c99', 'c11', 'c17', 'c23'
@@ -292,19 +300,19 @@ export class CommandRegistry {
         });
 
         this.register('mirai-vscode.onBtnToggleOverridingOptimizationClicked', async () => {
-            if (!this.state.currentPreset) {
-                vscode.window.showErrorMessage('未选择编译预设');
+            const preset = this.requireCurrentPreset();
+            if (!preset) {
                 return;
             }
 
             // 只有编译型语言支持优化级别
-            const languageId = this.state.currentPreset.languageId;
+            const languageId = preset.languageId;
             if (!['cpp', 'c', 'rust'].includes(languageId)) {
                 vscode.window.showInformationMessage('当前语言不支持优化级别设置');
                 return;
             }
 
-            const current = this.state.currentPreset.optimization || '默认';
+            const current = preset.optimization || '默认';
             const items = [`不改变（${current}）`, '默认', 'O0', 'O1', 'O2', 'O3', 'Ofast', 'Og', 'Os'];
 
             const selected = await vscode.window.showQuickPick(
@@ -324,12 +332,12 @@ export class CommandRegistry {
         });
 
         this.register('mirai-vscode.onBtnToggleOverridingTimeLimitClicked', async () => {
-            if (!this.state.currentPreset) {
-                vscode.window.showErrorMessage('未选择编译预设');
+            const preset = this.requireCurrentPreset();
+            if (!preset) {
                 return;
             }
 
-            const current = this.state.currentPreset.timeoutSec;
+            const current = preset.timeoutSec;
             const items = [
                 current ? `不改变（${current}秒）` : '不改变',
                 '无限制', '1秒', '2秒', '3秒', '5秒', '10秒', '20秒', '30秒', '60秒'
@@ -429,26 +437,100 @@ export class CommandRegistry {
         }
     }
 
-    private async runAllTests(force: boolean): Promise<void> {
+    private requireCurrentProblem(): boolean {
+        if (this.state.currentProblem) {
+            return true;
+        }
+
+        vscode.window.showErrorMessage('当前未选中试题');
+        return false;
+    }
+
+    private requireCurrentPreset(): LanguagePreset | undefined {
+        const preset = this.state.currentPreset;
+        if (preset) {
+            return preset;
+        }
+
+        vscode.window.showErrorMessage('未选择编译预设');
+        return undefined;
+    }
+
+    private getActiveSourceFileOrNotify(): string | undefined {
+        const srcFile = vscode.window.activeTextEditor?.document.fileName;
+        if (srcFile) {
+            return srcFile;
+        }
+
+        vscode.window.showErrorMessage('未打开文件');
+        return undefined;
+    }
+
+    private getHandlerOrNotify(languageId: string): ILanguageHandler | undefined {
+        const handler = this.registry.getHandler(languageId);
+        if (handler) {
+            return handler;
+        }
+
+        vscode.window.showErrorMessage(`不支持的语言: ${languageId}`);
+        return undefined;
+    }
+
+    private handleCompileResult(result: ICompileResult): boolean {
+        if (result.success) {
+            return true;
+        }
+
+        vscode.window.showErrorMessage(`编译失败：${result.message}`, '查看详细信息')
+            .then(v => { if (v) { this.compiler.showOutput(); } });
+        return false;
+    }
+
+    private async prepareExecutionContext(isDebugging: boolean = false): Promise<PreparedCommandContext | undefined> {
         await vscode.workspace.saveAll(false);
         if (!await this.ensurePreset()) {
             vscode.window.showErrorMessage('未选择编译测试预设');
-            return;
+            return undefined;
         }
 
-        const preset = this.state.getEffectivePreset()!;
-        const srcFile = vscode.window.activeTextEditor?.document.fileName;
+        const preset = this.state.getEffectivePreset(isDebugging);
+        if (!preset) {
+            vscode.window.showErrorMessage('未选择编译测试预设');
+            return undefined;
+        }
+
+        const srcFile = this.getActiveSourceFileOrNotify();
         if (!srcFile) {
-            vscode.window.showErrorMessage('未打开文件');
+            return undefined;
+        }
+
+        return { preset, srcFile };
+    }
+
+    private async prepareCompiledExecutionContext(
+        force: boolean,
+        isDebugging: boolean = false
+    ): Promise<PreparedCommandContext | undefined> {
+        const context = await this.prepareExecutionContext(isDebugging);
+        if (!context) {
+            return undefined;
+        }
+
+        const result = await this.compiler.compile(context.preset, context.srcFile, force);
+        if (!this.handleCompileResult(result)) {
+            return undefined;
+        }
+
+        return context;
+    }
+
+    private async runAllTests(force: boolean): Promise<void> {
+        const context = await this.prepareCompiledExecutionContext(force);
+        if (!context) {
             return;
         }
 
-        const result = await this.compiler.compile(preset, srcFile, force);
-        if (!result.success) {
-            vscode.window.showErrorMessage(`编译失败：${result.message}`, '查看详细信息')
-                .then(v => { if (v) { this.compiler.showOutput(); } });
-            return;
-        }
+        const { preset, srcFile } = context;
 
         this.inputEditor.reveal();
         const cases = this.caseProvider.allCases;
@@ -465,7 +547,7 @@ export class CommandRegistry {
                 testCase.result = { status: TestStatus.Running };
                 this.caseProvider.refresh();
 
-                testCase.result = await this.runner.runTest(preset, testCase, token);
+                testCase.result = await this.runner.runTest(srcFile, preset, testCase, token);
                 this.caseProvider.refresh();
                 progress.report({ increment: 100 / cases.length });
             }
@@ -476,25 +558,12 @@ export class CommandRegistry {
     }
 
     private async runSingleTest(testCase: TestCase, force: boolean): Promise<void> {
-        await vscode.workspace.saveAll(false);
-        if (!await this.ensurePreset()) {
-            vscode.window.showErrorMessage('未选择编译测试预设');
+        const context = await this.prepareCompiledExecutionContext(force);
+        if (!context) {
             return;
         }
 
-        const preset = this.state.getEffectivePreset()!;
-        const srcFile = vscode.window.activeTextEditor?.document.fileName;
-        if (!srcFile) {
-            vscode.window.showErrorMessage('未打开文件');
-            return;
-        }
-
-        const result = await this.compiler.compile(preset, srcFile, force);
-        if (!result.success) {
-            vscode.window.showErrorMessage(`编译失败：${result.message}`, '查看详细信息')
-                .then(v => { if (v) { this.compiler.showOutput(); } });
-            return;
-        }
+        const { preset, srcFile } = context;
 
         testCase.result = { status: TestStatus.Running };
         this.caseProvider.refresh();
@@ -504,7 +573,7 @@ export class CommandRegistry {
             title: '正在测试...',
             cancellable: true
         }, async (_, token) => {
-            testCase.result = await this.runner.runTest(preset, testCase, token);
+            testCase.result = await this.runner.runTest(srcFile, preset, testCase, token);
         });
 
         this.caseProvider.refresh();
@@ -512,32 +581,17 @@ export class CommandRegistry {
     }
 
     private async compileAndRun(force: boolean): Promise<void> {
-        await vscode.workspace.saveAll(false);
-        if (!await this.ensurePreset()) {
-            vscode.window.showErrorMessage('未选择编译测试预设');
+        const context = await this.prepareCompiledExecutionContext(force);
+        if (!context) {
             return;
         }
 
-        const preset = this.state.getEffectivePreset()!;
-        const srcFile = vscode.window.activeTextEditor?.document.fileName;
-        if (!srcFile) {
-            vscode.window.showErrorMessage('未打开文件');
-            return;
-        }
-
-        const result = await this.compiler.compile(preset, srcFile, force);
-        if (!result.success) {
-            vscode.window.showErrorMessage(`编译失败：${result.message}`, '查看详细信息')
-                .then(v => { if (v) { this.compiler.showOutput(); } });
-            return;
-        }
-
-        // 获取运行命令
-        const handler = this.registry.getHandler(preset.languageId);
+        const handler = this.getHandlerOrNotify(context.preset.languageId);
         if (!handler) {
-            vscode.window.showErrorMessage(`不支持的语言: ${preset.languageId}`);
             return;
         }
+
+        const { preset, srcFile } = context;
 
         const runCommand = handler.getRunCommand(
             srcFile,
@@ -561,35 +615,24 @@ export class CommandRegistry {
     }
 
     private async startDebugging(testCase?: TestCase): Promise<void> {
-        await vscode.workspace.saveAll(false);
-        if (!await this.ensurePreset()) {
-            vscode.window.showErrorMessage('未选择编译测试预设');
+        const context = await this.prepareExecutionContext(true);
+        if (!context) {
             return;
         }
 
-        const preset = this.state.getEffectivePreset(true)!;
-        const srcFile = vscode.window.activeTextEditor?.document.fileName;
-        if (!srcFile) {
-            vscode.window.showErrorMessage('未打开文件');
-            return;
-        }
-
-        // 检查是否有可用的调试器
-        const handler = this.registry.getHandler(preset.languageId);
+        const handler = this.getHandlerOrNotify(context.preset.languageId);
         if (!handler) {
-            vscode.window.showErrorMessage(`不支持的语言: ${preset.languageId}`);
             return;
         }
+
+        const { preset, srcFile } = context;
 
         if (!DebuggerDetector.hasAnyDebugger(preset.languageId)) {
             await DebuggerDetector.promptInstallDebugger(preset.languageId);
             return;
         }
 
-        const result = await this.compiler.compile(preset, srcFile);
-        if (!result.success) {
-            vscode.window.showErrorMessage(`编译失败：${result.message}`, '查看详细信息')
-                .then(v => { if (v) { this.compiler.showOutput(); } });
+        if (!this.handleCompileResult(await this.compiler.compile(preset, srcFile))) {
             return;
         }
 

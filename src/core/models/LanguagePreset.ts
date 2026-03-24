@@ -70,18 +70,6 @@ export class LanguagePreset implements ILanguagePreset {
     ) {}
 
     /**
-     * 获取可执行文件路径（编译型语言）
-     * 
-     * @deprecated 使用 handler.getOutputFile() 代替
-     */
-    getExecutableFile(srcFile: string, basePath: string, outputPath: string): string {
-        const ext = path.extname(srcFile);
-        const relativePath = path.relative(basePath, srcFile);
-        const exeExt = process.platform === 'win32' ? '.exe' : '';
-        return path.join(outputPath, path.dirname(relativePath), path.basename(relativePath, ext) + exeExt);
-    }
-
-    /**
      * 克隆预设
      */
     clone(): LanguagePreset {

@@ -45,15 +45,11 @@ export class RunnerService {
      * @returns 测试结果
      */
     async runTest(
+        srcFile: string,
         preset: LanguagePreset,
         testCase: TestCase,
         token: vscode.CancellationToken
     ): Promise<ITestResult> {
-        const srcFile = this.getCurrentFile();
-        if (!srcFile) {
-            return { status: TestStatus.Cancelled, message: '未打开文件' };
-        }
-
         const handler = this.registry.getHandler(preset.languageId);
         if (!handler) {
             return { 
@@ -170,10 +166,6 @@ export class RunnerService {
         const normalize = (s: string) => 
             s.split('\n').map(line => line.trimEnd()).join('\n').trimEnd();
         return normalize(output) === normalize(expected);
-    }
-
-    private getCurrentFile(): string | undefined {
-        return vscode.window.activeTextEditor?.document.fileName;
     }
 
     dispose(): void {
