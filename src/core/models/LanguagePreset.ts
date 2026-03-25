@@ -65,7 +65,7 @@ export class LanguagePreset implements ILanguagePreset {
         public runtimeArgs: string[] = [],
         public timeoutSec: number = 5,
         public memoryLimitMB: number = 512,
-        public mixStdoutStderr: boolean = false,
+        public mixStdoutStderr: boolean = true,
         public debuggerType: string = ''
     ) {}
 
@@ -132,7 +132,7 @@ export class LanguagePreset implements ILanguagePreset {
             obj.runtimeArgs?.slice() || [],
             obj.timeoutSec ?? 5,
             obj.memoryLimitMB ?? 512,
-            obj.mixStdoutStderr ?? false,
+            obj.mixStdoutStderr ?? true,
             obj.debuggerType || ''
         );
     }

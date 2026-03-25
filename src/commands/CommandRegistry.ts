@@ -148,7 +148,7 @@ export class CommandRegistry {
 
     private registerCaseCommands(): void {
         this.register('caseView.addCase', () => {
-            if (!this.requireCurrentProblem()) {
+            if (!this.requireCurrentProblemOrNotify()) {
                 return;
             }
             this.caseProvider.addCase();
@@ -178,10 +178,14 @@ export class CommandRegistry {
         });
 
         this.register('caseView.searchCasesInFolder', async () => {
-            if (!this.requireCurrentProblem()) {
+            if (!this.requireCurrentProblemOrNotify()) {
                 return;
             }
             // TODO: 实现从文件夹搜索样例
+        });
+
+        this.register('caseView.exportEnabledCases', async () => {
+            await this.exportEnabledCases();
         });
 
         this.register('caseView.setting', () => {
@@ -266,7 +270,7 @@ export class CommandRegistry {
         });
 
         this.register('mirai-vscode.onBtnToggleOverridingStdClicked', async () => {
-            const preset = this.requireCurrentPreset();
+            const preset = this.requireCurrentPresetOrNotify();
             if (!preset) {
                 return;
             }
@@ -300,7 +304,7 @@ export class CommandRegistry {
         });
 
         this.register('mirai-vscode.onBtnToggleOverridingOptimizationClicked', async () => {
-            const preset = this.requireCurrentPreset();
+            const preset = this.requireCurrentPresetOrNotify();
             if (!preset) {
                 return;
             }
@@ -332,7 +336,7 @@ export class CommandRegistry {
         });
 
         this.register('mirai-vscode.onBtnToggleOverridingTimeLimitClicked', async () => {
-            const preset = this.requireCurrentPreset();
+            const preset = this.requireCurrentPresetOrNotify();
             if (!preset) {
                 return;
             }
@@ -357,6 +361,75 @@ export class CommandRegistry {
                 }
             }
         });
+    }
+
+    private async exportEnabledCases(): Promise<void> {
+        if (!this.requireCurrentProblemOrNotify()) {
+            return;
+        }
+
+        await this.saveCurrentCase();
+
+        const enabledCases = this.caseProvider.allCases.filter(testCase => testCase.enabled);
+        if (enabledCases.length === 0) {
+            vscode.window.showInformationMessage('没有已启用的样例可导出');
+            return;
+        }
+
+        const workspace = this.config.workspacePath;
+        const activeFile = vscode.window.activeTextEditor?.document.fileName;
+        const defaultUri = activeFile
+            ? vscode.Uri.file(path.dirname(activeFile))
+            : workspace
+                ? vscode.Uri.file(workspace)
+                : undefined;
+
+        const selected = await vscode.window.showOpenDialog({
+            canSelectFiles: false,
+            canSelectFolders: true,
+            canSelectMany: false,
+            defaultUri,
+            openLabel: '导出到此文件夹',
+            title: '选择导出样例的文件夹'
+        });
+
+        const targetFolder = selected?.[0]?.fsPath;
+        if (!targetFolder) {
+            return;
+        }
+
+        const orderWidth = Math.max(2, String(enabledCases.length).length);
+
+        try {
+            fs.mkdirSync(targetFolder, { recursive: true });
+
+            enabledCases.forEach((testCase, index) => {
+                const baseName = this.buildExportCaseBaseName(testCase, index + 1, orderWidth);
+                fs.writeFileSync(path.join(targetFolder, `${baseName}.in`), testCase.input, 'utf-8');
+                fs.writeFileSync(path.join(targetFolder, `${baseName}.ans`), testCase.expectedOutput, 'utf-8');
+            });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`导出样例失败：${message}`);
+            return;
+        }
+
+        vscode.window.showInformationMessage(`已导出 ${enabledCases.length} 个样例到 ${targetFolder}`);
+    }
+
+    private buildExportCaseBaseName(testCase: TestCase, order: number, width: number): string {
+        const safeName = this.sanitizeCaseFileName(testCase.name);
+        return `${String(order).padStart(width, '0')}-${safeName}`;
+    }
+
+    private sanitizeCaseFileName(name: string): string {
+        const safeName = name
+            .trim()
+            .replace(/\.(in|ans)$/gi, '')
+            .replace(/[\\/:*?"<>|]/g, '')
+            .replace(/\s+/g, ' ');
+
+        return safeName || 'case';
     }
 
     // 辅助方法
@@ -437,7 +510,7 @@ export class CommandRegistry {
         }
     }
 
-    private requireCurrentProblem(): boolean {
+    private requireCurrentProblemOrNotify(): boolean {
         if (this.state.currentProblem) {
             return true;
         }
@@ -446,7 +519,7 @@ export class CommandRegistry {
         return false;
     }
 
-    private requireCurrentPreset(): LanguagePreset | undefined {
+    private requireCurrentPresetOrNotify(): LanguagePreset | undefined {
         const preset = this.state.currentPreset;
         if (preset) {
             return preset;

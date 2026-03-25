@@ -185,6 +185,11 @@
 				"icon": "media/folder-search.svg"
 			},
 			{
+				"command": "caseView.exportEnabledCases",
+				"title": "导出已启用样例",
+				"icon": "media/share.svg"
+			},
+			{
 				"command": "outputView.copyOutput",
 				"title": "复制输出",
 				"icon": "media/copy.svg"
@@ -238,6 +243,11 @@
 				},
 				{
 					"command": "caseView.searchCasesInFolder",
+					"when": "view==caseView",
+					"group": "navigation"
+				},
+				{
+					"command": "caseView.exportEnabledCases",
 					"when": "view==caseView",
 					"group": "navigation"
 				},
