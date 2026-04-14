@@ -45,6 +45,11 @@ function addThemeStyle(colors, family, attrs) {
 
 
 require(['vs/editor/editor.main'], function () {
+	const CHANGE_DEBOUNCE_MS = 120;
+	let revision = 0;
+	let suppressChangeEvent = false;
+	let changeTimer;
+
 	var editor = monaco.editor.create(document.getElementById('editor'), {
 		value: '',
 		language: 'plaintext',
@@ -94,6 +99,30 @@ require(['vs/editor/editor.main'], function () {
 			colors: colors,
 		});
 	}
+
+	function clearPendingChange() {
+		if (changeTimer !== undefined) {
+			clearTimeout(changeTimer);
+			changeTimer = undefined;
+		}
+	}
+
+	function postTextChanged(immediate) {
+		const send = function () {
+			changeTimer = undefined;
+			vscode.postMessage({ command: 'textChanged', data: editor.getValue(), revision: revision });
+		};
+
+		if (immediate) {
+			clearPendingChange();
+			send();
+			return;
+		}
+
+		clearPendingChange();
+		changeTimer = setTimeout(send, CHANGE_DEBOUNCE_MS);
+	}
+
 	updateTheme();
 	monaco.editor.setTheme('myTheme');
 	window.addEventListener('message', event => {
@@ -101,21 +130,40 @@ require(['vs/editor/editor.main'], function () {
 		// console.log("message:", message);
 		switch (message.command) {
 			case 'getText':
-				vscode.postMessage({ command: 'response', data: editor.getValue() });
+				clearPendingChange();
+				vscode.postMessage({
+					command: 'response',
+					data: editor.getValue(),
+					requestId: message.requestId,
+					revision: revision,
+				});
 				break;
 			case 'setText':
-				editor.setValue(message.data);
+				clearPendingChange();
+				revision = typeof message.revision === 'number' ? message.revision : revision + 1;
+				if (editor.getValue() !== message.data) {
+					// 程序化同步不应再次回流到扩展侧。
+					suppressChangeEvent = true;
+					try {
+						editor.setValue(message.data);
+					} finally {
+						suppressChangeEvent = false;
+					}
+				}
 				break;
 			case 'themeChanged':
 				updateTheme();
+				monaco.editor.setTheme('myTheme');
 				break;
 		}
 	});
 	editor.onDidChangeModelContent(function (event) {
-		vscode.postMessage({ command: 'textChanged', data: editor.getValue() });
-	});
-});
+		if (suppressChangeEvent) {
+			return;
+		}
 
-function notifyLoad() {
+		revision += 1;
+		postTextChanged(false);
+	});
 	vscode.postMessage({ command: 'load' });
-}
+});

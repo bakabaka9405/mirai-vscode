@@ -21,12 +21,15 @@ type PreparedCommandContext = {
  * 命令注册器 - 集中管理所有命令
  */
 export class CommandRegistry {
+    private static readonly RUN_TERMINAL_NAME = 'mirai-vscode:编译运行';
+
     private disposables: vscode.Disposable[] = [];
     private state: StateManager;
     private config: ConfigService;
     private compiler: CompilerService;
     private runner: RunnerService;
     private registry: LanguageHandlerRegistry;
+    private runTerminal?: vscode.Terminal;
 
     constructor(
         private context: vscode.ExtensionContext,
@@ -41,6 +44,14 @@ export class CommandRegistry {
         this.compiler = CompilerService.getInstance();
         this.runner = RunnerService.getInstance();
         this.registry = this.compiler.getRegistry();
+
+        const terminalCloseDisposable = vscode.window.onDidCloseTerminal(terminal => {
+            if (terminal === this.runTerminal) {
+                this.runTerminal = undefined;
+            }
+        });
+        this.disposables.push(terminalCloseDisposable);
+        this.context.subscriptions.push(terminalCloseDisposable);
     }
 
     registerAll(): void {
@@ -122,6 +133,7 @@ export class CommandRegistry {
             await this.saveCurrentCase();
             this.state.currentProblem = item.problem;
             this.caseProvider.switchCases(item.problem.cases);
+            this.state.currentCase = this.caseProvider.current;
             this.showCurrentCase();
         });
     }
@@ -148,7 +160,7 @@ export class CommandRegistry {
 
     private registerCaseCommands(): void {
         this.register('caseView.addCase', () => {
-            if (!this.requireCurrentProblemOrNotify()) {
+            if (!this.getCurrentProblemOrNotify()) {
                 return;
             }
             this.caseProvider.addCase();
@@ -178,7 +190,7 @@ export class CommandRegistry {
         });
 
         this.register('caseView.searchCasesInFolder', async () => {
-            if (!this.requireCurrentProblemOrNotify()) {
+            if (!this.getCurrentProblemOrNotify()) {
                 return;
             }
             // TODO: 实现从文件夹搜索样例
@@ -270,7 +282,7 @@ export class CommandRegistry {
         });
 
         this.register('mirai-vscode.onBtnToggleOverridingStdClicked', async () => {
-            const preset = this.requireCurrentPresetOrNotify();
+            const preset = this.getCurrentPresetOrNotify();
             if (!preset) {
                 return;
             }
@@ -304,7 +316,7 @@ export class CommandRegistry {
         });
 
         this.register('mirai-vscode.onBtnToggleOverridingOptimizationClicked', async () => {
-            const preset = this.requireCurrentPresetOrNotify();
+            const preset = this.getCurrentPresetOrNotify();
             if (!preset) {
                 return;
             }
@@ -336,7 +348,7 @@ export class CommandRegistry {
         });
 
         this.register('mirai-vscode.onBtnToggleOverridingTimeLimitClicked', async () => {
-            const preset = this.requireCurrentPresetOrNotify();
+            const preset = this.getCurrentPresetOrNotify();
             if (!preset) {
                 return;
             }
@@ -364,7 +376,7 @@ export class CommandRegistry {
     }
 
     private async exportEnabledCases(): Promise<void> {
-        if (!this.requireCurrentProblemOrNotify()) {
+        if (!this.getCurrentProblemOrNotify()) {
             return;
         }
 
@@ -510,7 +522,7 @@ export class CommandRegistry {
         }
     }
 
-    private requireCurrentProblemOrNotify(): boolean {
+    private getCurrentProblemOrNotify(): boolean {
         if (this.state.currentProblem) {
             return true;
         }
@@ -519,7 +531,7 @@ export class CommandRegistry {
         return false;
     }
 
-    private requireCurrentPresetOrNotify(): LanguagePreset | undefined {
+    private getCurrentPresetOrNotify(): LanguagePreset | undefined {
         const preset = this.state.currentPreset;
         if (preset) {
             return preset;
@@ -560,6 +572,7 @@ export class CommandRegistry {
     }
 
     private async prepareExecutionContext(isDebugging: boolean = false): Promise<PreparedCommandContext | undefined> {
+        await this.saveCurrentCase();
         await vscode.workspace.saveAll(false);
         if (!await this.ensurePreset()) {
             vscode.window.showErrorMessage('未选择编译测试预设');
@@ -673,7 +686,7 @@ export class CommandRegistry {
             this.config.buildBasePath
         );
 
-        const terminal = vscode.window.createTerminal('mirai-vscode:编译运行');
+        const terminal = this.getOrCreateRunTerminal();
 
         // 构建终端命令
         let terminalCommand: string;
@@ -685,6 +698,23 @@ export class CommandRegistry {
 
         terminal.sendText(terminalCommand);
         terminal.show();
+    }
+
+    private getOrCreateRunTerminal(): vscode.Terminal {
+        if (this.runTerminal && vscode.window.terminals.includes(this.runTerminal)) {
+            return this.runTerminal;
+        }
+
+        for (let i = vscode.window.terminals.length - 1; i >= 0; i--) {
+            const terminal = vscode.window.terminals[i];
+            if (terminal.name === CommandRegistry.RUN_TERMINAL_NAME) {
+                this.runTerminal = terminal;
+                return terminal;
+            }
+        }
+
+        this.runTerminal = vscode.window.createTerminal(CommandRegistry.RUN_TERMINAL_NAME);
+        return this.runTerminal;
     }
 
     private async startDebugging(testCase?: TestCase): Promise<void> {
