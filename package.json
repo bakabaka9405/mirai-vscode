@@ -15,6 +15,8 @@
 		"Other"
 	],
 	"activationEvents": [
+		"onView:problemsExplorer",
+		"onView:caseView",
 		"onLanguage:cpp",
 		"onLanguage:c",
 		"onLanguage:python",
@@ -444,13 +446,55 @@
 									"Os"
 								]
 							},
-							"additionalArgs": {
+							"compilerArgs": {
 								"type": "array",
-								"description": "编译参数",
+								"description": "编译器参数，位于输入文件之前",
 								"items": {
 									"type": "string"
 								},
 								"default": []
+							},
+							"linkerArgs": {
+								"type": "array",
+								"description": "链接器参数，位于输出文件之后",
+								"items": {
+									"type": "string"
+								},
+								"default": []
+							},
+							"compilerArgsCommands": {
+								"type": "array",
+								"description": "通过命令动态获取编译器参数（如 pkg-config --cflags xxx）",
+								"items": {
+									"type": "string"
+								},
+								"default": []
+							},
+							"linkerArgsCommands": {
+								"type": "array",
+								"description": "通过命令动态获取链接器参数（如 pkg-config --libs xxx）",
+								"items": {
+									"type": "string"
+								},
+								"default": []
+							},
+							"additionalArgs": {
+								"type": "array",
+								"description": "编译参数（旧版，等同于 compilerArgs）",
+								"items": {
+									"type": "string"
+								},
+								"default": [],
+								"deprecationMessage": "请使用 compilerArgs 代替"
+							},
+							"additionalArgsCommands": {
+								"type": "array",
+								"description": "通过命令动态获取编译参数（旧版，等同于 compilerArgsCommands）",
+								"items": {
+									"type": "string"
+								},
+								"default": [],
+								"deprecationMessage": "请使用 compilerArgsCommands 或 linkerArgsCommands 代替"
 							},
 							"additionalIncludePaths": {
 								"type": "array",
@@ -528,11 +572,43 @@
 								"description": "优化级别",
 								"enum": ["O0", "O1", "O2", "O3", "Ofast", "Og", "Os"]
 							},
-							"additionalArgs": {
+							"compilerArgs": {
 								"type": "array",
-								"description": "额外编译参数",
+								"description": "额外编译器参数，位于输入文件之前",
 								"items": { "type": "string" },
 								"default": []
+							},
+							"linkerArgs": {
+								"type": "array",
+								"description": "额外链接器参数，位于输出文件之后",
+								"items": { "type": "string" },
+								"default": []
+							},
+							"compilerArgsCommands": {
+								"type": "array",
+								"description": "通过命令动态获取额外编译器参数（如 pkg-config --cflags xxx）",
+								"items": { "type": "string" },
+								"default": []
+							},
+							"linkerArgsCommands": {
+								"type": "array",
+								"description": "通过命令动态获取额外链接器参数（如 pkg-config --libs xxx）",
+								"items": { "type": "string" },
+								"default": []
+							},
+							"additionalArgs": {
+								"type": "array",
+								"description": "额外编译参数（旧版，等同于 compilerArgs）",
+								"items": { "type": "string" },
+								"default": [],
+								"deprecationMessage": "请使用 compilerArgs 代替"
+							},
+							"additionalArgsCommands": {
+								"type": "array",
+								"description": "通过命令动态获取额外编译参数（旧版，等同于 compilerArgsCommands）",
+								"items": { "type": "string" },
+								"default": [],
+								"deprecationMessage": "请使用 compilerArgsCommands 或 linkerArgsCommands 代替"
 							},
 							"additionalIncludePaths": {
 								"type": "array",

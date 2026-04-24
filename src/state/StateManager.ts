@@ -143,10 +143,11 @@ export class StateManager {
                 handler.applyDebugMode(preset);
             } else {
                 // 默认调试设置（C/C++ 风格）
-                if (!preset.additionalArgs) {
-                    preset.additionalArgs = [];
+                if (!preset.compilerArgs) {
+                    preset.compilerArgs = [];
                 }
-                preset.additionalArgs.push('-gdwarf-4');
+                preset.compilerArgs.push('-gdwarf-4');
+                preset.additionalArgs = preset.compilerArgs;
                 preset.optimization = 'O0';
             }
         }

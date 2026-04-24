@@ -11,6 +11,25 @@ export class CHandler extends BaseCompiledHandler {
     readonly displayName = 'C';
     readonly fileExtensions = ['c', 'h'];
 
+    private getCompilerArgs(preset: LanguagePreset): string[] {
+        const args: string[] = [];
+
+        if (preset.std) {
+            args.push(`-std=${preset.std}`);
+        }
+        if (preset.optimization) {
+            args.push(`-${preset.optimization}`);
+        }
+        if (preset.compilerArgs) {
+            args.push(...preset.compilerArgs);
+        }
+        if (preset.additionalIncludePaths) {
+            args.push(...preset.additionalIncludePaths.map(p => `-I${p}`));
+        }
+
+        return args;
+    }
+
     protected getCompilerPath(preset: LanguagePreset): string {
         return preset.compilerPath || 'gcc';
     }
@@ -21,26 +40,26 @@ export class CHandler extends BaseCompiledHandler {
         basePath: string,
         outputPath: string
     ): string[] {
-        const args: string[] = [];
-        
-        if (preset.std) {
-            args.push(`-std=${preset.std}`);
-        }
-        if (preset.optimization) {
-            args.push(`-${preset.optimization}`);
-        }
-        if (preset.additionalArgs) {
-            args.push(...preset.additionalArgs);
-        }
-        if (preset.additionalIncludePaths) {
-            args.push(...preset.additionalIncludePaths.map(p => `-I${p}`));
-        }
+        const args = this.getCompilerArgs(preset);
         
         args.push(srcFile);
         args.push('-o');
         args.push(this.getOutputFile(srcFile, basePath, outputPath));
+        if (preset.linkerArgs) {
+            args.push(...preset.linkerArgs);
+        }
         
         return args;
+    }
+
+    async getCacheDependencyFiles(
+        srcFile: string,
+        preset: LanguagePreset,
+        basePath: string,
+        outputPath: string
+    ): Promise<string[] | undefined> {
+        void outputPath;
+        return this.getDependencyFilesFromCompiler(srcFile, preset, basePath, this.getCompilerArgs(preset));
     }
 
     validatePreset(preset: LanguagePreset): string | null {
@@ -83,12 +102,13 @@ export class CHandler extends BaseCompiledHandler {
     }
 
     applyDebugMode(preset: LanguagePreset): void {
-        if (!preset.additionalArgs) {
-            preset.additionalArgs = [];
+        if (!preset.compilerArgs) {
+            preset.compilerArgs = [];
         }
-        if (!preset.additionalArgs.includes('-g') && !preset.additionalArgs.some(a => a.startsWith('-gdwarf'))) {
-            preset.additionalArgs.push('-gdwarf-4');
+        if (!preset.compilerArgs.includes('-g') && !preset.compilerArgs.some(a => a.startsWith('-gdwarf'))) {
+            preset.compilerArgs.push('-gdwarf-4');
         }
+        preset.additionalArgs = preset.compilerArgs;
         preset.optimization = 'O0';
     }
 

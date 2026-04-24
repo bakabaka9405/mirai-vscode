@@ -34,6 +34,17 @@ export class CppConfigGenerator implements ILspConfigGenerator {
             };
         }
 
+        let effectivePreset: LanguagePreset;
+        try {
+            effectivePreset = await preset.withResolvedAdditionalArgs(srcBasePath);
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            return {
+                success: false,
+                warning: `无法生成 compile_commands.json：获取动态参数失败。${message}`
+            };
+        }
+
         // 只处理源文件（排除头文件）
         const sourceFiles = srcFiles.filter(f => 
             f.endsWith('.cpp') || f.endsWith('.cc') || f.endsWith('.cxx') || 
@@ -41,7 +52,7 @@ export class CppConfigGenerator implements ILspConfigGenerator {
         );
 
         const commands = sourceFiles.map(file => {
-            const compileCommand = handler.getCompileCommand!(file, preset, srcBasePath, buildBasePath);
+            const compileCommand = handler.getCompileCommand!(file, effectivePreset, srcBasePath, buildBasePath);
 
             return {
                 directory: srcBasePath,

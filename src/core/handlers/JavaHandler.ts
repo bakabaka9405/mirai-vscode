@@ -64,8 +64,8 @@ export class JavaHandler implements ILanguageHandler {
         args.push('-d', classDir);
 
         // 额外参数
-        if (preset.additionalArgs) {
-            args.push(...preset.additionalArgs);
+        if (preset.compilerArgs) {
+            args.push(...preset.compilerArgs);
         }
 
         // 源文件
@@ -194,11 +194,12 @@ export class JavaHandler implements ILanguageHandler {
     applyDebugMode(preset: LanguagePreset): void {
         // Java 调试不需要特殊编译参数
         // 但可以添加 -g 生成调试信息
-        if (!preset.additionalArgs) {
-            preset.additionalArgs = [];
+        if (!preset.compilerArgs) {
+            preset.compilerArgs = [];
         }
-        if (!preset.additionalArgs.includes('-g')) {
-            preset.additionalArgs.push('-g');
+        if (!preset.compilerArgs.includes('-g')) {
+            preset.compilerArgs.push('-g');
         }
+        preset.additionalArgs = preset.compilerArgs;
     }
 }

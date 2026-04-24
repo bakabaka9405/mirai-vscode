@@ -117,9 +117,22 @@ export class CompilerService {
         const basePath = this.config.srcBasePath;
         const outputPath = this.config.buildBasePath;
         const outputFile = handler.getOutputFile(srcFile, basePath, outputPath);
+        const compileArgsCommandCwd = this.getCompileArgsCommandCwd(srcFile, basePath);
+
+        let effectivePreset: LanguagePreset;
+        try {
+            effectivePreset = await preset.withResolvedAdditionalArgs(compileArgsCommandCwd);
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            return {
+                success: false,
+                message: `获取动态参数失败: ${message}`,
+                output: ''
+            };
+        }
 
         // 验证编译器/解释器
-        const validationError = await this.validateCompiler(preset, handler);
+        const validationError = await this.validateCompiler(effectivePreset, handler);
         if (validationError) {
             return {
                 success: false,
@@ -129,7 +142,7 @@ export class CompilerService {
         }
 
         // 计算缓存键
-        const cacheKey = await this.getCacheKey(srcFile, preset, handler, basePath, outputPath);
+        const cacheKey = await this.getCacheKey(srcFile, effectivePreset, handler, basePath, outputPath);
         
         if (
             !force
@@ -146,7 +159,7 @@ export class CompilerService {
             title: `正在编译 (${handler.displayName})...`,
             cancellable: true
         }, async (progress, token) => {
-            return handler.compile(srcFile, preset, basePath, outputPath, token);
+            return handler.compile(srcFile, effectivePreset, basePath, outputPath, token);
         });
 
         // 更新输出通道
@@ -155,7 +168,7 @@ export class CompilerService {
 
         // 更新缓存
         if (result.success) {
-            const nextCacheKey = cacheKey || await this.getCacheKey(srcFile, preset, handler, basePath, outputPath);
+            const nextCacheKey = cacheKey || await this.getCacheKey(srcFile, effectivePreset, handler, basePath, outputPath);
             if (nextCacheKey) {
                 this.fileHashCache.set(srcFile, nextCacheKey);
             } else {
@@ -164,6 +177,10 @@ export class CompilerService {
         }
 
         return result;
+    }
+
+    private getCompileArgsCommandCwd(srcFile: string, basePath: string): string {
+        return this.config.workspacePath || basePath || path.dirname(srcFile);
     }
 
     /**

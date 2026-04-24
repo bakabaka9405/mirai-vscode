@@ -20,8 +20,8 @@ export class CppHandler extends BaseCompiledHandler {
         if (includeOptimization && preset.optimization) {
             args.push(`-${preset.optimization}`);
         }
-        if (preset.additionalArgs) {
-            args.push(...preset.additionalArgs);
+        if (preset.compilerArgs) {
+            args.push(...preset.compilerArgs);
         }
         if (preset.additionalIncludePaths) {
             args.push(...preset.additionalIncludePaths.map(p => `-I${p}`));
@@ -45,6 +45,9 @@ export class CppHandler extends BaseCompiledHandler {
         args.push(srcFile);
         args.push('-o');
         args.push(this.getOutputFile(srcFile, basePath, outputPath));
+        if (preset.linkerArgs) {
+            args.push(...preset.linkerArgs);
+        }
 
         return args;
     }
@@ -100,12 +103,13 @@ export class CppHandler extends BaseCompiledHandler {
 
     applyDebugMode(preset: LanguagePreset): void {
         // 添加调试符号
-        if (!preset.additionalArgs) {
-            preset.additionalArgs = [];
+        if (!preset.compilerArgs) {
+            preset.compilerArgs = [];
         }
-        if (!preset.additionalArgs.includes('-g') && !preset.additionalArgs.some(a => a.startsWith('-gdwarf'))) {
-            preset.additionalArgs.push('-gdwarf-4');
+        if (!preset.compilerArgs.includes('-g') && !preset.compilerArgs.some(a => a.startsWith('-gdwarf'))) {
+            preset.compilerArgs.push('-gdwarf-4');
         }
+        preset.additionalArgs = preset.compilerArgs;
         // 禁用优化
         preset.optimization = 'O0';
     }

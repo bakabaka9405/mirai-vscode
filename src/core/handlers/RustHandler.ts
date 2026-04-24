@@ -40,8 +40,8 @@ export class RustHandler extends BaseCompiledHandler {
         }
 
         // 额外参数
-        if (preset.additionalArgs) {
-            args.push(...preset.additionalArgs);
+        if (preset.compilerArgs) {
+            args.push(...preset.compilerArgs);
         }
 
         // 输出文件
@@ -93,13 +93,14 @@ export class RustHandler extends BaseCompiledHandler {
     }
 
     applyDebugMode(preset: LanguagePreset): void {
-        if (!preset.additionalArgs) {
-            preset.additionalArgs = [];
+        if (!preset.compilerArgs) {
+            preset.compilerArgs = [];
         }
         // Rust 调试需要 -g 标志
-        if (!preset.additionalArgs.includes('-g')) {
-            preset.additionalArgs.push('-g');
+        if (!preset.compilerArgs.includes('-g')) {
+            preset.compilerArgs.push('-g');
         }
+        preset.additionalArgs = preset.compilerArgs;
         // 禁用优化
         preset.optimization = 'O0';
     }

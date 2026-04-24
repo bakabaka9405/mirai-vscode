@@ -1,4 +1,7 @@
-import * as path from 'path';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 /**
  * 语言预设配置接口
@@ -25,8 +28,18 @@ export interface ILanguagePreset {
     std?: string;
     /** 优化级别（如 O2） */
     optimization?: string;
-    /** 额外编译参数 */
+    /** 额外编译器参数 */
+    compilerArgs?: string[];
+    /** 额外链接器参数 */
+    linkerArgs?: string[];
+    /** 通过命令动态获取额外编译器参数（如 pkg-config --cflags） */
+    compilerArgsCommands?: string[];
+    /** 通过命令动态获取额外链接器参数（如 pkg-config --libs） */
+    linkerArgsCommands?: string[];
+    /** 额外编译参数（旧版，等同于 compilerArgs） */
     additionalArgs?: string[];
+    /** 通过命令动态获取额外编译参数（旧版，等同于 compilerArgsCommands） */
+    additionalArgsCommands?: string[];
     /** 额外包含路径 */
     additionalIncludePaths?: string[];
 
@@ -51,6 +64,9 @@ export interface ILanguagePreset {
  * 扩展自原有的 TestPreset，支持多种编程语言
  */
 export class LanguagePreset implements ILanguagePreset {
+    private static readonly commandTimeoutMs = 10000;
+    private static readonly commandMaxBuffer = 1024 * 1024;
+
     constructor(
         public label: string,
         public languageId: string,
@@ -61,13 +77,21 @@ export class LanguagePreset implements ILanguagePreset {
         public std: string = '',
         public optimization: string = '',
         public additionalArgs: string[] = [],
+        public additionalArgsCommands: string[] = [],
         public additionalIncludePaths: string[] = [],
         public runtimeArgs: string[] = [],
         public timeoutSec: number = 5,
         public memoryLimitMB: number = 512,
         public mixStdoutStderr: boolean = true,
-        public debuggerType: string = ''
-    ) {}
+        public debuggerType: string = '',
+        public compilerArgs: string[] = additionalArgs,
+        public linkerArgs: string[] = [],
+        public compilerArgsCommands: string[] = additionalArgsCommands,
+        public linkerArgsCommands: string[] = []
+    ) {
+        this.additionalArgs = this.compilerArgs;
+        this.additionalArgsCommands = this.compilerArgsCommands;
+    }
 
     /**
      * 克隆预设
@@ -82,13 +106,18 @@ export class LanguagePreset implements ILanguagePreset {
             this.runtimePath,
             this.std,
             this.optimization,
-            [...this.additionalArgs],
+            [...this.compilerArgs],
+            [...this.compilerArgsCommands],
             [...this.additionalIncludePaths],
             [...this.runtimeArgs],
             this.timeoutSec,
             this.memoryLimitMB,
             this.mixStdoutStderr,
-            this.debuggerType
+            this.debuggerType,
+            [...this.compilerArgs],
+            [...this.linkerArgs],
+            [...this.compilerArgsCommands],
+            [...this.linkerArgsCommands]
         );
     }
 
@@ -96,7 +125,7 @@ export class LanguagePreset implements ILanguagePreset {
      * 获取用于持久化匹配的稳定键
      */
     getStorageKey(): string {
-        return JSON.stringify({
+        const key = {
             label: this.label,
             languageId: this.languageId,
             compilerPath: this.compilerPath,
@@ -104,20 +133,35 @@ export class LanguagePreset implements ILanguagePreset {
             runtimePath: this.runtimePath,
             std: this.std,
             optimization: this.optimization,
-            additionalArgs: this.additionalArgs,
+            additionalArgs: this.compilerArgs,
+            additionalArgsCommands: this.compilerArgsCommands,
             additionalIncludePaths: this.additionalIncludePaths,
             runtimeArgs: this.runtimeArgs,
             timeoutSec: this.timeoutSec,
             memoryLimitMB: this.memoryLimitMB,
             mixStdoutStderr: this.mixStdoutStderr,
             debuggerType: this.debuggerType
-        });
+        } as Record<string, unknown>;
+
+        if (this.linkerArgs.length > 0) {
+            key.linkerArgs = this.linkerArgs;
+        }
+        if (this.linkerArgsCommands.length > 0) {
+            key.linkerArgsCommands = this.linkerArgsCommands;
+        }
+
+        return JSON.stringify(key);
     }
 
     /**
      * 从配置对象创建预设
      */
     static fromObject(obj: Partial<ILanguagePreset> & { label: string }): LanguagePreset {
+        const compilerArgs = obj.compilerArgs?.slice() || obj.additionalArgs?.slice() || [];
+        const linkerArgs = obj.linkerArgs?.slice() || [];
+        const compilerArgsCommands = obj.compilerArgsCommands?.slice() || obj.additionalArgsCommands?.slice() || [];
+        const linkerArgsCommands = obj.linkerArgsCommands?.slice() || [];
+
         return new LanguagePreset(
             obj.label,
             obj.languageId || 'cpp',  // 默认 C++，向后兼容
@@ -127,14 +171,149 @@ export class LanguagePreset implements ILanguagePreset {
             obj.runtimePath || '',
             obj.std || '',
             obj.optimization || '',
-            obj.additionalArgs?.slice() || [],
+            compilerArgs,
+            compilerArgsCommands,
             obj.additionalIncludePaths?.slice() || [],
             obj.runtimeArgs?.slice() || [],
             obj.timeoutSec ?? 5,
             obj.memoryLimitMB ?? 512,
             obj.mixStdoutStderr ?? true,
-            obj.debuggerType || ''
+            obj.debuggerType || '',
+            compilerArgs,
+            linkerArgs,
+            compilerArgsCommands,
+            linkerArgsCommands
         );
+    }
+
+    /**
+     * 解析动态参数命令并返回合并后的新预设
+     */
+    async withResolvedAdditionalArgs(cwd?: string): Promise<LanguagePreset> {
+        const resolvedPreset = this.clone();
+        if (resolvedPreset.compilerArgsCommands.length === 0 && resolvedPreset.linkerArgsCommands.length === 0) {
+            return resolvedPreset;
+        }
+
+        const dynamicCompilerArgs = await LanguagePreset.resolveCommandArgs(
+            resolvedPreset.compilerArgsCommands,
+            cwd
+        );
+        const dynamicLinkerArgs = await LanguagePreset.resolveCommandArgs(
+            resolvedPreset.linkerArgsCommands,
+            cwd
+        );
+
+        if (dynamicCompilerArgs.length > 0) {
+            resolvedPreset.compilerArgs.push(...dynamicCompilerArgs);
+        }
+        if (dynamicLinkerArgs.length > 0) {
+            resolvedPreset.linkerArgs.push(...dynamicLinkerArgs);
+        }
+
+        resolvedPreset.additionalArgs = resolvedPreset.compilerArgs;
+        resolvedPreset.additionalArgsCommands = resolvedPreset.compilerArgsCommands;
+
+        return resolvedPreset;
+    }
+
+    private static async resolveCommandArgs(commands: string[], cwd?: string): Promise<string[]> {
+        const resolvedArgs: string[] = [];
+
+        for (const rawCommand of commands) {
+            const command = rawCommand.trim();
+            if (!command) {
+                continue;
+            }
+
+            try {
+                const { stdout } = await execAsync(command, {
+                    cwd,
+                    windowsHide: true,
+                    timeout: LanguagePreset.commandTimeoutMs,
+                    maxBuffer: LanguagePreset.commandMaxBuffer
+                });
+                resolvedArgs.push(...LanguagePreset.parseCommandOutputArgs(stdout));
+            } catch (error: unknown) {
+                const e = error as { message?: string; stderr?: string | Buffer };
+                const stderr = e.stderr?.toString().trim();
+                const detail = stderr || e.message || '未知错误';
+                throw new Error(`执行参数命令失败: ${command}\n${detail}`);
+            }
+        }
+
+        return resolvedArgs;
+    }
+
+    /**
+     * 将命令输出按 shell 风格拆分为参数
+     */
+    private static parseCommandOutputArgs(output: string): string[] {
+        const text = output.trim();
+        if (!text) {
+            return [];
+        }
+
+        const args: string[] = [];
+        let current = '';
+        let quote: '"' | '\'' | null = null;
+
+        for (let i = 0; i < text.length; i++) {
+            const ch = text[i];
+
+            if (quote) {
+                if (ch === quote) {
+                    quote = null;
+                    continue;
+                }
+
+                if (ch === '\\' && quote === '"') {
+                    const next = text[i + 1];
+                    if (next && (next === '"' || next === '\\' || /\s/.test(next))) {
+                        current += next;
+                        i++;
+                        continue;
+                    }
+                }
+
+                current += ch;
+                continue;
+            }
+
+            if (ch === '"' || ch === '\'') {
+                quote = ch;
+                continue;
+            }
+
+            if (/\s/.test(ch)) {
+                if (current.length > 0) {
+                    args.push(current);
+                    current = '';
+                }
+                continue;
+            }
+
+            if (ch === '\\') {
+                const next = text[i + 1];
+                if (next && (/\s/.test(next) || next === '"' || next === '\'' || next === '\\')) {
+                    current += next;
+                    i++;
+                    continue;
+                }
+            }
+
+            current += ch;
+        }
+
+        if (quote) {
+            throw new Error('参数命令输出包含未闭合引号');
+        }
+
+        if (current.length > 0) {
+            args.push(current);
+        }
+
+        return args;
     }
 
     /**
