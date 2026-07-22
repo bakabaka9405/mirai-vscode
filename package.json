@@ -197,6 +197,31 @@
 				"icon": "media/copy.svg"
 			},
 			{
+				"command": "outputView.modeMixed",
+				"title": "输出模式：混合",
+				"icon": "$(list-tree)"
+			},
+			{
+				"command": "outputView.modeStdout",
+				"title": "输出模式：标准输出",
+				"icon": "$(terminal)"
+			},
+			{
+				"command": "outputView.modeStderr",
+				"title": "输出模式：标准错误",
+				"icon": "$(output)"
+			},
+			{
+				"command": "outputView.enableStderrStyle",
+				"title": "高亮标准错误输出",
+				"icon": "$(eye-closed)"
+			},
+			{
+				"command": "outputView.disableStderrStyle",
+				"title": "关闭标准错误输出高亮",
+				"icon": "$(eye)"
+			},
+			{
 				"command": "caseView.setting",
 				"title": "配置",
 				"icon": "media/gear.svg"
@@ -267,6 +292,31 @@
 					"command": "outputView.copyOutput",
 					"when": "view==outputView",
 					"group": "navigation"
+				},
+				{
+					"command": "outputView.modeMixed",
+					"when": "view==outputView && mirai.outputMode==mixed",
+					"group": "navigation@1"
+				},
+				{
+					"command": "outputView.modeStdout",
+					"when": "view==outputView && mirai.outputMode==stdout",
+					"group": "navigation@1"
+				},
+				{
+					"command": "outputView.modeStderr",
+					"when": "view==outputView && mirai.outputMode==stderr",
+					"group": "navigation@1"
+				},
+				{
+					"command": "outputView.disableStderrStyle",
+					"when": "view==outputView && mirai.outputMode==mixed && mirai.distinguishStderr",
+					"group": "navigation@2"
+				},
+				{
+					"command": "outputView.enableStderrStyle",
+					"when": "view==outputView && mirai.outputMode==mixed && !mirai.distinguishStderr",
+					"group": "navigation@2"
 				},
 				{
 					"command": "caseView.stopRunning",
@@ -513,15 +563,10 @@
 							"memoryLimitMB": {
 								"type": "number",
 								"description": "内存限制(MB)，默认为 512MB",
-								"minimum": 0,
-								"default": 512
-							},
-							"mixStdoutStderr": {
-								"type": "boolean",
-								"description": "把标准错误输出也当作标准输出处理",
-								"default": false
-							},
-							"description": {
+						"minimum": 0,
+						"default": 512
+					},
+					"description": {
 								"type": "string",
 								"description": "描述",
 								"default": ""
@@ -631,15 +676,10 @@
 							"memoryLimitMB": {
 								"type": "number",
 								"description": "内存限制（MB）",
-								"minimum": 0,
-								"default": 512
-							},
-							"mixStdoutStderr": {
-								"type": "boolean",
-								"description": "合并 stdout 和 stderr",
-								"default": false
-							},
-							"debuggerType": {
+						"minimum": 0,
+						"default": 512
+					},
+					"debuggerType": {
 								"type": "string",
 								"description": "调试器类型覆盖（如 lldb, cppdbg, debugpy）"
 							}

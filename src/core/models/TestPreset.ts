@@ -13,7 +13,6 @@ export interface ITestPreset {
     additionalIncludePaths: string[];
     timeoutSec: number;
     memoryLimitMB: number;
-    mixStdoutStderr: boolean;
 }
 
 export class TestPreset implements ITestPreset {
@@ -26,8 +25,7 @@ export class TestPreset implements ITestPreset {
         public additionalArgs: string[] = [],
         public additionalIncludePaths: string[] = [],
         public timeoutSec: number = 1,
-        public memoryLimitMB: number = 512,
-        public mixStdoutStderr: boolean = false
+        public memoryLimitMB: number = 512
     ) {}
 
     getExecutableFile(srcFile: string, basePath: string, outputPath: string): string {
@@ -62,8 +60,7 @@ export class TestPreset implements ITestPreset {
             [...this.additionalArgs],
             [...this.additionalIncludePaths],
             this.timeoutSec,
-            this.memoryLimitMB,
-            this.mixStdoutStderr
+            this.memoryLimitMB
         );
     }
 
@@ -77,8 +74,7 @@ export class TestPreset implements ITestPreset {
             obj.additionalArgs?.slice() || [],
             obj.additionalIncludePaths?.slice() || [],
             obj.timeoutSec ?? 1,
-            obj.memoryLimitMB ?? 512,
-            obj.mixStdoutStderr ?? false
+            obj.memoryLimitMB ?? 512
         );
     }
 }

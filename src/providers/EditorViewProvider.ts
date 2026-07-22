@@ -5,6 +5,11 @@ type WebviewMessage =
     | { command: 'load' }
     | { command: 'response'; data: string; requestId?: number; revision?: number };
 
+export interface EditorOffsetRange {
+    start: number;
+    end: number;
+}
+
 /**
  * Webview 编辑器 Provider - 用于输入/输出编辑
  */
@@ -12,6 +17,7 @@ export class EditorViewProvider implements vscode.WebviewViewProvider {
     private webviewView?: vscode.WebviewView;
     private pendingText?: string;
     private currentText = '';
+    private currentRanges: EditorOffsetRange[] = [];
     private revision = 0;
     private isReady = false;
     private nextRequestId = 1;
@@ -65,6 +71,7 @@ export class EditorViewProvider implements vscode.WebviewViewProvider {
                         webviewViewRef.webview.postMessage({
                             command: 'setText',
                             data: this.pendingText ?? this.currentText,
+                            ranges: this.currentRanges,
                             revision: this.revision
                         });
                         this.pendingText = undefined;
@@ -87,13 +94,15 @@ export class EditorViewProvider implements vscode.WebviewViewProvider {
         });
     }
 
-    setText(text: string): void {
+    setText(text: string, ranges: EditorOffsetRange[] = []): void {
         const requiresSync = !this.webviewView || !this.isReady || this.pendingText !== undefined;
-        if (this.currentText === text && !requiresSync) {
+        const rangesChanged = JSON.stringify(this.currentRanges) !== JSON.stringify(ranges);
+        if (this.currentText === text && !rangesChanged && !requiresSync) {
             return;
         }
 
         this.currentText = text;
+        this.currentRanges = ranges;
         this.revision += 1;
 
         if (!this.webviewView || !this.isReady) {
@@ -104,6 +113,7 @@ export class EditorViewProvider implements vscode.WebviewViewProvider {
         this.webviewView.webview.postMessage({
             command: 'setText',
             data: text,
+            ranges,
             revision: this.revision
         });
     }

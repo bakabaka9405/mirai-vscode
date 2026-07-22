@@ -49,6 +49,7 @@ require(['vs/editor/editor.main'], function () {
 	let revision = 0;
 	let suppressChangeEvent = false;
 	let changeTimer;
+	let stderrDecorations = [];
 
 	var editor = monaco.editor.create(document.getElementById('editor'), {
 		value: '',
@@ -107,6 +108,18 @@ require(['vs/editor/editor.main'], function () {
 		}
 	}
 
+	function updateStderrDecorations(ranges) {
+		const model = editor.getModel();
+		const decorations = (ranges || []).map(range => ({
+			range: monaco.Range.fromPositions(
+				model.getPositionAt(range.start),
+				model.getPositionAt(range.end)
+			),
+			options: { inlineClassName: 'stderr-output' }
+		}));
+		stderrDecorations = editor.deltaDecorations(stderrDecorations, decorations);
+	}
+
 	function postTextChanged(immediate) {
 		const send = function () {
 			changeTimer = undefined;
@@ -150,6 +163,7 @@ require(['vs/editor/editor.main'], function () {
 						suppressChangeEvent = false;
 					}
 				}
+				updateStderrDecorations(message.ranges);
 				break;
 			case 'themeChanged':
 				updateTheme();

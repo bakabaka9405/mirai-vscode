@@ -15,8 +15,6 @@ export interface ILanguagePreset {
     timeoutSec: number;
     /** 内存限制（MB） */
     memoryLimitMB: number;
-    /** 是否混合 stdout 和 stderr */
-    mixStdoutStderr: boolean;
 
     /** 语言标识符 */
     languageId: string;
@@ -82,7 +80,6 @@ export class LanguagePreset implements ILanguagePreset {
         public runtimeArgs: string[] = [],
         public timeoutSec: number = 5,
         public memoryLimitMB: number = 512,
-        public mixStdoutStderr: boolean = true,
         public debuggerType: string = '',
         public compilerArgs: string[] = additionalArgs,
         public linkerArgs: string[] = [],
@@ -112,7 +109,6 @@ export class LanguagePreset implements ILanguagePreset {
             [...this.runtimeArgs],
             this.timeoutSec,
             this.memoryLimitMB,
-            this.mixStdoutStderr,
             this.debuggerType,
             [...this.compilerArgs],
             [...this.linkerArgs],
@@ -139,7 +135,6 @@ export class LanguagePreset implements ILanguagePreset {
             runtimeArgs: this.runtimeArgs,
             timeoutSec: this.timeoutSec,
             memoryLimitMB: this.memoryLimitMB,
-            mixStdoutStderr: this.mixStdoutStderr,
             debuggerType: this.debuggerType
         } as Record<string, unknown>;
 
@@ -177,7 +172,6 @@ export class LanguagePreset implements ILanguagePreset {
             obj.runtimeArgs?.slice() || [],
             obj.timeoutSec ?? 5,
             obj.memoryLimitMB ?? 512,
-            obj.mixStdoutStderr ?? true,
             obj.debuggerType || '',
             compilerArgs,
             linkerArgs,

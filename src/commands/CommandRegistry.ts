@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { StateManager } from '../state';
 import { ConfigService, CompilerService, RunnerService } from '../services';
-import { ProblemsTreeProvider, CaseTreeProvider, EditorViewProvider, ProblemTreeItem } from '../providers';
+import { ProblemsTreeProvider, CaseTreeProvider, EditorViewProvider, ProblemTreeItem, EditorOffsetRange } from '../providers';
 import { TestCase, TestStatus, LanguagePreset } from '../core/models';
 import {
     LanguageHandlerRegistry,
@@ -16,6 +16,8 @@ type PreparedCommandContext = {
     preset: LanguagePreset;
     srcFile: string;
 };
+
+type OutputMode = 'mixed' | 'stdout' | 'stderr';
 
 /**
  * 命令注册器 - 集中管理所有命令
@@ -30,6 +32,8 @@ export class CommandRegistry {
     private runner: RunnerService;
     private registry: LanguageHandlerRegistry;
     private runTerminal?: vscode.Terminal;
+    private outputMode: OutputMode = 'mixed';
+    private distinguishStderr = true;
 
     constructor(
         private context: vscode.ExtensionContext,
@@ -55,6 +59,7 @@ export class CommandRegistry {
     }
 
     registerAll(): void {
+        this.updateOutputContexts();
         this.registerProblemsCommands();
         this.registerCaseCommands();
         this.registerTestCommands();
@@ -227,6 +232,26 @@ export class CommandRegistry {
     }
 
     private registerEditorCommands(): void {
+        const cycleOutputMode = (): void => {
+            const modes: OutputMode[] = ['mixed', 'stdout', 'stderr'];
+            this.outputMode = modes[(modes.indexOf(this.outputMode) + 1) % modes.length];
+            this.updateOutputContexts();
+            this.renderCurrentOutput();
+        };
+        this.register('outputView.modeMixed', cycleOutputMode);
+        this.register('outputView.modeStdout', cycleOutputMode);
+        this.register('outputView.modeStderr', cycleOutputMode);
+        this.register('outputView.enableStderrStyle', () => {
+            this.distinguishStderr = true;
+            this.updateOutputContexts();
+            this.renderCurrentOutput();
+        });
+        this.register('outputView.disableStderrStyle', () => {
+            this.distinguishStderr = false;
+            this.updateOutputContexts();
+            this.renderCurrentOutput();
+        });
+
         this.register('outputView.copyOutput', async () => {
             const content = await this.outputEditor.getText();
             await vscode.env.clipboard.writeText(content);
@@ -238,10 +263,9 @@ export class CommandRegistry {
             const file1 = path.join(os.tmpdir(), 'contrast_lt.txt');
             const file2 = path.join(os.tmpdir(), 'contrast_rt.txt');
 
-            const [output, expected] = await Promise.all([
-                this.outputEditor.getText(),
-                this.expectedOutputEditor.getText()
-            ]);
+            const testCase = this.state.currentCase || this.caseProvider.current;
+            const output = testCase?.output ?? '';
+            const expected = await this.expectedOutputEditor.getText();
 
             fs.writeFileSync(file1, output);
             fs.writeFileSync(file2, expected);
@@ -498,13 +522,11 @@ export class CommandRegistry {
     private async saveCurrentCase(): Promise<void> {
         const testCase = this.state.currentCase;
         if (testCase) {
-            const [input, output, expected] = await Promise.all([
+            const [input, expected] = await Promise.all([
                 this.inputEditor.getText(),
-                this.outputEditor.getText(),
                 this.expectedOutputEditor.getText()
             ]);
             testCase.input = input;
-            testCase.output = output;
             testCase.expectedOutput = expected;
         }
     }
@@ -513,13 +535,46 @@ export class CommandRegistry {
         const testCase = this.state.currentCase || this.caseProvider.current;
         if (testCase) {
             this.inputEditor.setText(testCase.input);
-            this.outputEditor.setText(testCase.output);
+            this.renderCurrentOutput();
             this.expectedOutputEditor.setText(testCase.expectedOutput);
         } else {
             this.inputEditor.setText('');
             this.outputEditor.setText('');
             this.expectedOutputEditor.setText('');
         }
+    }
+
+    private updateOutputContexts(): void {
+        vscode.commands.executeCommand('setContext', 'mirai.outputMode', this.outputMode);
+        vscode.commands.executeCommand('setContext', 'mirai.distinguishStderr', this.distinguishStderr);
+    }
+
+    private renderCurrentOutput(): void {
+        const testCase = this.state.currentCase || this.caseProvider.current;
+        if (!testCase) {
+            this.outputEditor.setText('');
+            return;
+        }
+
+        const chunks = testCase.outputChunks.length > 0
+            ? testCase.outputChunks
+            : [{ source: 'stdout' as const, text: testCase.output }];
+        const ranges: EditorOffsetRange[] = [];
+        let text = '';
+
+        for (const chunk of chunks) {
+            if (this.outputMode !== 'mixed' && chunk.source !== this.outputMode) {
+                continue;
+            }
+
+            const start = text.length;
+            text += chunk.text;
+            if (this.outputMode === 'mixed' && this.distinguishStderr && chunk.source === 'stderr' && text.length > start) {
+                ranges.push({ start, end: text.length });
+            }
+        }
+
+        this.outputEditor.setText(text, ranges);
     }
 
     private getCurrentProblemOrNotify(): boolean {

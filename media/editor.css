@@ -7,3 +7,9 @@ body,
 	padding: 0;
 	box-sizing: border-box;
 }
+
+.stderr-output {
+	color: var(--vscode-errorForeground);
+	background: var(--vscode-inputValidation-errorBackground);
+	border-bottom: 1px solid var(--vscode-inputValidation-errorBorder);
+}

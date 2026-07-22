@@ -1,5 +1,12 @@
 import * as fs from 'fs';
 
+export type OutputSource = 'stdout' | 'stderr';
+
+export interface IOutputChunk {
+    source: OutputSource;
+    text: string;
+}
+
 /**
  * 测试样例数据模型
  * 与 VS Code API 解耦的纯数据类
@@ -36,6 +43,7 @@ export class TestCase implements ITestCase {
     private _expectedOutput: string = '';
     public output: string = '';
     public result?: ITestResult;
+    public outputChunks: IOutputChunk[] = [];
 
     constructor(
         public name: string,
@@ -48,6 +56,10 @@ export class TestCase implements ITestCase {
         this._input = input;
         this.output = output;
         this._expectedOutput = expectedOutput;
+        // 非空旧 output 视为一个 stdout chunk
+        if (this.output) {
+            this.outputChunks = [{ source: 'stdout', text: this.output }];
+        }
     }
 
     get input(): string {

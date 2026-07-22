@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { spawn, ChildProcess } from 'child_process';
-import { TestCase, TestStatus, ITestResult, LanguagePreset } from '../core/models';
+import { TestCase, TestStatus, ITestResult, LanguagePreset, IOutputChunk } from '../core/models';
 import { LanguageHandlerRegistry } from '../core/handlers';
 import { ConfigService } from './ConfigService';
 import { CompilerService } from './CompilerService';
@@ -78,8 +78,19 @@ export class RunnerService {
     ): Promise<ITestResult> {
         return new Promise(resolve => {
             let output = '';
-            let startTime: bigint;
+            let startTime = process.hrtime.bigint();
             let maxMemory = 0;
+            const outputChunks: IOutputChunk[] = [];
+
+            // 保存 output 与 outputChunks 快照的局部 helper
+            const saveOutput = () => {
+                testCase.output = output;
+                testCase.outputChunks = [...outputChunks];
+            };
+
+            let forced: ITestResult | null = null;   // 首个强制结果
+            let spawnError: Error | null = null;
+            let settled = false;
 
             const child = spawn(runCommand.command, runCommand.args, { 
                 windowsHide: true,
@@ -87,37 +98,76 @@ export class RunnerService {
             });
             this.runningProcess = child;
 
+            // --- 超时：记录并 kill，由 close 结算 ---
             const timeoutId = preset.timeoutSec > 0 ? setTimeout(() => {
+                if (!forced) {
+                    forced = {
+                        status: TestStatus.TimeLimitExceeded,
+                        time: preset.timeoutSec * 1000,
+                        memory: maxMemory
+                    };
+                }
                 child.kill();
-                testCase.output = output;
-                resolve({
-                    status: TestStatus.TimeLimitExceeded,
-                    time: preset.timeoutSec * 1000,
-                    memory: maxMemory
-                });
             }, preset.timeoutSec * 1000) : undefined;
 
+            // --- Runner stop：记录并 kill，由 close 结算 ---
+            const stopListener = this.onStopRunning(() => {
+                if (!forced) {
+                    forced = { status: TestStatus.Cancelled };
+                }
+                child.kill();
+            });
+
+            // --- CancellationToken：记录并 kill，由 close 结算 ---
+            const cancelListener = token.onCancellationRequested(() => {
+                if (!forced) {
+                    forced = { status: TestStatus.Cancelled };
+                }
+                child.kill();
+            });
+
+            // --- spawn 后重新计时 ---
             child.on('spawn', () => {
                 startTime = process.hrtime.bigint();
             });
 
-            const stopListener = this.onStopRunning(() => {
-                child.kill();
-                stopListener.dispose();
-                testCase.output = output;
-                resolve({ status: TestStatus.Cancelled });
+            // --- spawn 失败：记录错误，由 close 结算 ---
+            child.on('error', error => {
+                spawnError = error;
             });
 
-            token.onCancellationRequested(() => {
-                child.kill();
-                testCase.output = output;
-                resolve({ status: TestStatus.Cancelled });
-            });
+            // --- close：唯一结算点，保证所有 stdio data 已处理 ---
+            child.on('close', () => {
+                if (settled) { return; }
+                settled = true;
 
-            child.on('exit', code => {
                 clearTimeout(timeoutId);
+                stopListener.dispose();
+                cancelListener.dispose();
+                if (this.runningProcess === child) {
+                    this.runningProcess = undefined;
+                }
+
+                saveOutput();
+
+                // 强制结果优先
+                if (forced) {
+                    resolve(forced);
+                    return;
+                }
+
+                // spawn 失败
+                if (spawnError) {
+                    resolve({
+                        status: TestStatus.RuntimeError,
+                        message: spawnError.message
+                    });
+                    return;
+                }
+
+                // 正常 exit 判题
+                const code = child.exitCode;
                 const time = Number(process.hrtime.bigint() - startTime) / 1e6;
-                testCase.output = output;
 
                 if (code === 0) {
                     const isCorrect = this.compareOutput(output, testCase.expectedOutput);
@@ -135,30 +185,20 @@ export class RunnerService {
                 }
             });
 
-            child.on('error', error => {
-                clearTimeout(timeoutId);
-                testCase.output = output;
-                resolve({
-                    status: TestStatus.RuntimeError,
-                    message: error.message
-                });
+            // --- stdin：始终发送 EOF，空输入也不例外 ---
+            child.stdin.end(testCase.input);
+
+            // --- stdout/stderr 以 utf8 编码监听，按 Node data 回调顺序 push chunk ---
+            child.stdout.setEncoding('utf8');
+            child.stdout.on('data', (data: string) => {
+                outputChunks.push({ source: 'stdout', text: data });
+                output += data;
             });
 
-            if (testCase.input) {
-                child.stdin.write(testCase.input);
-                child.stdin.end();
-                startTime = process.hrtime.bigint();
-            }
-
-            child.stdout.on('data', (data: Buffer) => {
-                output += data.toString();
+            child.stderr.setEncoding('utf8');
+            child.stderr.on('data', (data: string) => {
+                outputChunks.push({ source: 'stderr', text: data });
             });
-
-            if (preset.mixStdoutStderr) {
-                child.stderr.on('data', (data: Buffer) => {
-                    output += data.toString();
-                });
-            }
         });
     }
 
