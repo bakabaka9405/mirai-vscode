@@ -198,7 +198,60 @@ export class CommandRegistry {
             if (!this.getCurrentProblemOrNotify()) {
                 return;
             }
-            // TODO: 实现从文件夹搜索样例
+
+            const workspace = this.config.workspacePath;
+            const activeFile = vscode.window.activeTextEditor?.document.fileName;
+            const defaultUri = activeFile
+                ? vscode.Uri.file(path.dirname(activeFile))
+                : workspace
+                    ? vscode.Uri.file(workspace)
+                    : undefined;
+            const selected = await vscode.window.showOpenDialog({
+                canSelectFiles: false,
+                canSelectFolders: true,
+                canSelectMany: false,
+                defaultUri,
+                openLabel: '选择样例文件夹',
+                title: '选择样例文件夹'
+            });
+            const targetFolder = selected?.[0]?.fsPath;
+            if (!targetFolder) {
+                return;
+            }
+
+            let importedCases: TestCase[];
+            try {
+                const [inputFiles, answerFiles, outputFiles] = await Promise.all([
+                    vscode.workspace.findFiles(new vscode.RelativePattern(targetFolder, '*.in'), null),
+                    vscode.workspace.findFiles(new vscode.RelativePattern(targetFolder, '*.ans'), null),
+                    vscode.workspace.findFiles(new vscode.RelativePattern(targetFolder, '*.out'), null)
+                ]);
+                const expectedOutputFiles = new Map(
+                    [...outputFiles, ...answerFiles].map(file => [
+                        path.basename(file.fsPath, path.extname(file.fsPath)),
+                        file.fsPath
+                    ])
+                );
+
+                importedCases = inputFiles
+                    .flatMap(file => {
+                        const name = path.basename(file.fsPath, path.extname(file.fsPath));
+                        const expectedOutputPath = expectedOutputFiles.get(name);
+                        return expectedOutputPath
+                            ? [new TestCase(name, true, true, file.fsPath, '', expectedOutputPath)]
+                            : [];
+                    })
+                    .sort((left, right) => path.basename(left.inputPath).localeCompare(path.basename(right.inputPath)));
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                vscode.window.showErrorMessage(`读取样例文件夹失败：${message}`);
+                return;
+            }
+
+            this.caseProvider.allCases.push(...importedCases);
+            this.caseProvider.refresh();
+
+            vscode.window.showInformationMessage(`已导入 ${importedCases.length} 个样例`);
         });
 
         this.register('caseView.exportEnabledCases', async () => {
